@@ -175,14 +175,14 @@ class TransformerConfig(FairseqDataclass):
     )
     adaptive_input: bool = False
     #encoder_steps_classifier:EncoderStepsClassifierConfig=EncoderStepsClassifierConfig()
-    encoder: SelectiveEncDecBaseConfig = SelectiveEncDecBaseConfig()
+    encoder: SelectiveEncDecBaseConfig = None#SelectiveEncDecBaseConfig()
     # TODO should really be in the encoder config
     max_source_positions: int = field(
         default=DEFAULT_MAX_SOURCE_POSITIONS,
         metadata={"help": "Maximum input length supported by the encoder"},
     )
    # decoder_steps_classifier:DecoderStepsClassifierConfig=DecoderStepsClassifierConfig()
-    decoder: SelectiveDecoderConfig = SelectiveDecoderConfig()
+    decoder: SelectiveDecoderConfig = None#SelectiveDecoderConfig()
     # TODO should really be in the decoder config
     max_target_positions: int = field(
         default=DEFAULT_MAX_TARGET_POSITIONS,
@@ -262,7 +262,7 @@ class TransformerConfig(FairseqDataclass):
         default=False, metadata={"help": "perform cross+self-attention"}
     )
     # args for Training with Quantization Noise for Extreme Model Compression ({Fan*, Stock*} et al., 2020)
-    quant_noise: QuantNoiseConfig = field(default=QuantNoiseConfig())
+    quant_noise: QuantNoiseConfig =field(default= None) #field(default=QuantNoiseConfig())
     min_params_to_wrap: int = field(
         default=DEFAULT_MIN_PARAMS_TO_WRAP,
         metadata={
