@@ -15,9 +15,9 @@ from fairseq import utils
 from fairseq.dataclass.utils import gen_parser_from_dataclass
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoderDecoderModel
-from models.transformer_config import TransformerConfig
-from models.transformer_decoder import TransformerDecoderBase
-from models.transformer_encoder import TransformerEncoderBase
+from ..models.transformer_config import TransformerConfig
+from ..models.transformer_decoder import TransformerDecoder
+from ..models.transformer_encoder import TransformerEncoder
 
 
 
@@ -128,11 +128,11 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
 
     @classmethod
     def build_encoder(cls, cfg, src_dict, embed_tokens):
-        return TransformerEncoderBase(cfg, src_dict, embed_tokens)
+        return TransformerEncoder(cfg, src_dict, embed_tokens)
 
     @classmethod
     def build_decoder(cls, cfg, tgt_dict, embed_tokens):
-        return TransformerDecoderBase(
+        return TransformerDecoder(
             cfg,
             tgt_dict,
             embed_tokens,

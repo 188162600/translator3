@@ -62,28 +62,51 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     num_options:int = field(
         default=4,metadata={"help":"number of options"}
     )
-    
+    num_steps_classifier_classes:int = field(
+        default=II("model.encoder.num_options"),
+        metadata={"help":"number of classes in the classifier"}
+    )
+    num_steps:int = field(
+        default=II("model.encoder.layers"),
+        metadata={"help":"number of steps"}
+    )
+    def __post_init__(self):
+        #  II doesn't work if we are just creating the object outside of hydra so fix that
+        #super().__post_init__()
+        if self.num_steps == II("model.encoder.layers"):
+            self.num_steps = self.layers
+        if self.num_steps_classifier_classes == II("model.encoder.num_options"):
+            self.num_steps_classifier_classes = self.num_options
+        
     
     # num_encoder_layers:int = field(
     #     default=1,metadata={"help":"number of encoder layers"}
     # )
     
 
-@dataclass
-class EncoderStepsClassifierConfig(EncDecBaseConfig):
-    layers:int = field(
-        default=2,metadata={"help":"number of decoder layers"}
-    )
-    num_classes:int=II("model.encoder.num_options")
-    num_steps:int=II("model.encoder.layers")
+# @dataclass
+# class EncoderStepsClassifierConfig(EncDecBaseConfig):
+#     layers:int = field(
+#         default=2,metadata={"help":"number of decoder layers"}
+#     )
+#     num_steps_classifier_classes:int=II("model.encoder.num_options")
+#     num_steps:int=II("model.encoder.layers")
 
-@dataclass
-class DecoderStepsClassifierConfig(EncDecBaseConfig):
-    layers:int = field(
-        default=4,metadata={"help":"number of decoder layers"}
-    )
-    num_classes:int=II("model.decoder.num_options")
-    num_steps:int=II("model.decoder.layers")+2 #input and output embeddings
+# @dataclass
+# class DecoderStepsClassifierConfig(EncDecBaseConfig):
+#     layers:int = field(
+#         default=4,metadata={"help":"number of decoder layers"}
+#     )
+#     num_steps_classifier_classes:int=II("model.decoder.num_options")
+#     num_steps:int=field(
+#         default=II("model.decoder.layers+2"),
+#         metadata={"help":"number of decoder layers+embedding and output layers"}
+#     )
+#     def __post_init__(self):
+#         #  II doesn't work if we are just creating the object outside of hydra so fix that
+#         if self.num_steps == II("model.decoder.layers"):
+#             self.num_steps = 
+#     #=II("model.decoder.layers")+2 #input and output embeddings
     
 @dataclass
 class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
@@ -97,13 +120,22 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
             "help": "decoder output dimension (extra linear layer if different from decoder embed dim)"
         },
     )
-
+   
+    num_steps:int = field(
+        default=II("model.encoder.layers+2"),
+        metadata={"help":"layers+embedding and output layers"}
+    )
+    
     def __post_init__(self):
+        super().__post_init__()
         #  II doesn't work if we are just creating the object outside of hydra so fix that
         if self.input_dim == II("model.decoder.embed_dim"):
             self.input_dim = self.embed_dim
         if self.output_dim == II("model.decoder.embed_dim"):
             self.output_dim = self.embed_dim
+        if self.num_steps == II("model.encoder.layers+2"):
+            self.num_steps = self.layers+2
+        
 
 
 @dataclass
@@ -142,13 +174,14 @@ class TransformerConfig(FairseqDataclass):
         },
     )
     adaptive_input: bool = False
-    classifier_encoder:EncDecBaseConfig=EncDecBaseConfig()
+    #encoder_steps_classifier:EncoderStepsClassifierConfig=EncoderStepsClassifierConfig()
     encoder: SelectiveEncDecBaseConfig = SelectiveEncDecBaseConfig()
     # TODO should really be in the encoder config
     max_source_positions: int = field(
         default=DEFAULT_MAX_SOURCE_POSITIONS,
         metadata={"help": "Maximum input length supported by the encoder"},
     )
+   # decoder_steps_classifier:DecoderStepsClassifierConfig=DecoderStepsClassifierConfig()
     decoder: SelectiveDecoderConfig = SelectiveDecoderConfig()
     # TODO should really be in the decoder config
     max_target_positions: int = field(
@@ -310,8 +343,10 @@ class TransformerConfig(FairseqDataclass):
 
     @classmethod
     def from_namespace(cls, args):
+        
         if args is None:
             return None
+        #print("args",args)
         if not isinstance(args, cls):
             seen = set()
             config = cls()
@@ -336,27 +371,28 @@ class TransformerConfig(FairseqDataclass):
                     # same but for encoder
                     if safe_hasattr(args, "encoder"):
                         seen.add("encoder")
-                        config.encoder = EncDecBaseConfig(**args.encoder)
+                        config.encoder = SelectiveEncDecBaseConfig(**args.encoder)
                     else:
                         config.encoder = cls._copy_keys(
-                            args, EncDecBaseConfig, "encoder", seen
+                            args, SelectiveEncDecBaseConfig, "encoder", seen
                         )
-                elif fld.name=="encoder_steps_classifier":
-                    if safe_hasattr(args, "encoder_steps_classifier"):
-                        seen.add("encoder_steps_classifier")
-                        config.encoder_steps_classifier = EncDecBaseConfig(**args.encoder_steps_classifier)
-                    else:
-                        config.encoder_steps_classifier = cls._copy_keys(
-                            args, EncDecBaseConfig, "encoder_steps_classifier", seen
-                        )
-                elif fld.name == "decoder_steps_classifier":
-                    if safe_hasattr(args, "decoder_steps_classifier"):
-                        seen.add("decoder_steps_classifier")
-                        config.decoder_steps_classifier = EncDecBaseConfig(**args.decoder_steps_classifier)
-                    else:
-                        config.decoder_steps_classifier = cls._copy_keys(
-                            args, EncDecBaseConfig, "decoder_steps_classifier", seen
-                        )
+                # elif fld.name=="encoder_steps_classifier":
+                #     if safe_hasattr(args, "encoder_steps_classifier"):
+                #         seen.add("encoder_steps_classifier")
+                #         config.encoder_steps_classifier = EncoderStepsClassifierConfig(**args.encoder_steps_classifier)
+                #     else:
+                #         config.encoder_steps_classifier = cls._copy_keys(
+                #             args, EncoderStepsClassifierConfig, "encoder_steps_classifier", seen
+                #         )
+                # elif fld.name == "decoder_steps_classifier":
+                #     if safe_hasattr(args, "decoder_steps_classifier"):
+                #         seen.add("decoder_steps_classifier")
+                #         config.decoder_steps_classifier = DecoderStepsClassifierConfig(**args.decoder_steps_classifier)
+                #         #config.decoder_steps_classifier.num_steps=config.decoder_steps_classifier.layers+2
+                #     else:
+                #         config.decoder_steps_classifier = cls._copy_keys(
+                #             args, DecoderStepsClassifierConfig, "decoder_steps_classifier", seen
+                #         )
                         
                 elif fld.name == "quant_noise":
                     # same but for quant_noise

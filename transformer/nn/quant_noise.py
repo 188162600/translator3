@@ -4,7 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import torch
-from nn.selective_linear import SelectiveLinear
+from ..nn.selective_linear import SelectiveLinear
 import torch.nn as nn
 
 

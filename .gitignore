@@ -1,6 +1,6 @@
 checkpoints
 data-bin
-examples/translation/orig
-examples/translation/subword-nmt
-examples/translation/wmt17_en_de
-examples/translation/mosesdecoder
+cli/orig
+cli/subword-nmt
+cli/wmt17_en_de
+cli/mosesdecoder

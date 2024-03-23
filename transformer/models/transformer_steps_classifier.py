@@ -25,7 +25,7 @@ from fairseq.modules import (
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-from models.transformer_steps_classifier import TransformerEncoderStepsClassifier,NextSteps
+
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -33,10 +33,41 @@ def module_name_fordropout(module_name: str) -> str:
     else:
         return module_name
 
-
-class TransformerEncoderBase(FairseqEncoder):
+class NextSteps:
+    def __init__(self,tensor):
+        self.tensor = tensor
+       
+        self._indices =None
+     
+      
+        self._softmax =None
+     
+       
+        
+        self._probability =None
+      
+       
+        self._confidence=None
+    def get_indices(self):
+        if self._indices is None:
+            self._indices = torch.argmax(self.tensor,dim=1)
+        return self._indices
+    def get_softmax(self):
+        if self._softmax is None:
+            self._softmax = torch.softmax(self.tensor, dim=1)
+        return self._softmax
+    def get_probability(self):
+        if self._probability is None:
+            expanded_indices = self.get_indices().unsqueeze(-1)
+            self._probability = torch.gather(self.get_softmax(), 1,expanded_indices).squeeze(-1)
+        return self._probability
+    def get_confidence(self):
+        if self._confidence is None:
+            self._confidence=torch.sum(self.get_probability(),dim=1)
+        return self._confidence
+class TransformerStepsClassifierBase(FairseqEncoder):
     """
-    Transformer encoder consisting of *cfg.encoder.layers* layers. Each layer
+    Transformer encoder consisting of *classifier_cfg.layers* layers. Each layer
     is a :class:`TransformerEncoderLayer`.
 
     Args:
@@ -45,45 +76,47 @@ class TransformerEncoderBase(FairseqEncoder):
         embed_tokens (torch.nn.Embedding): input embedding
     """
 
-    def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
-        self.cfg = cfg
+    def __init__(self, transformer_cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
+        self.transformer_cfg = transformer_cfg
+        self.classifier_cfg=classifier_cfg
         super().__init__(dictionary)
+        
         self.register_buffer("version", torch.Tensor([3]))
 
         self.dropout_module = FairseqDropout(
-            cfg.dropout, module_name=module_name_fordropout(self.__class__.__name__)
+            transformer_cfg.dropout, module_name=module_name_fordropout(self.__class__.__name__)
         )
-        self.encoder_layerdrop = cfg.encoder.layerdrop
+        self.encoder_layerdrop = classifier_cfg.layerdrop
         self.return_fc = return_fc
 
         embed_dim = embed_tokens.embedding_dim
         self.padding_idx = embed_tokens.padding_idx
-        self.max_source_positions = cfg.max_source_positions
+       
 
         self.embed_tokens = embed_tokens
 
-        self.embed_scale = 1.0 if cfg.no_scale_embedding else math.sqrt(embed_dim)
+        self.embed_scale = 1.0 if transformer_cfg.no_scale_embedding else math.sqrt(embed_dim)
 
         self.embed_positions = (
             PositionalEmbedding(
-                cfg.max_source_positions,
+                transformer_cfg.max_source_positions,
                 embed_dim,
                 self.padding_idx,
-                learned=cfg.encoder.learned_pos,
+                learned=classifier_cfg.learned_pos,
             )
-            if not cfg.no_token_positional_embeddings
+            if not transformer_cfg.no_token_positional_embeddings
             else None
         )
-        if cfg.layernorm_embedding:
-            self.layernorm_embedding = LayerNorm(embed_dim, export=cfg.export)
+        if transformer_cfg.layernorm_embedding:
+            self.layernorm_embedding = LayerNorm(embed_dim, export=transformer_cfg.export)
         else:
             self.layernorm_embedding = None
 
-        if not cfg.adaptive_input and cfg.quant_noise.pq > 0:
+        if not transformer_cfg.adaptive_input and transformer_cfg.quant_noise.pq > 0:
             self.quant_noise = apply_quant_noise_(
                 nn.Linear(embed_dim, embed_dim, bias=False),
-                cfg.quant_noise.pq,
-                cfg.quant_noise.pq_block_size,
+                transformer_cfg.quant_noise.pq,
+                transformer_cfg.quant_noise.pq_block_size,
             )
         else:
             self.quant_noise = None
@@ -93,29 +126,42 @@ class TransformerEncoderBase(FairseqEncoder):
         else:
             self.layers = nn.ModuleList([])
         self.layers.extend(
-            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)]
+            [self.build_encoder_layer(transformer_cfg) for i in range(classifier_cfg.layers)]
         )
         self.num_layers = len(self.layers)
 
-        if cfg.encoder.normalize_before:
-            self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
+        if classifier_cfg.normalize_before:
+            self.layer_norm = LayerNorm(embed_dim, export=transformer_cfg.export)
         else:
             self.layer_norm = None
-
-    def build_encoder_layer(self, cfg):
-        layer = transformer_layer.TransformerEncoderLayerBase(
-            cfg, return_fc=self.return_fc
+        self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
+        
+    def build_output_projection(self,  transformer_cfg, classifier_cfg, dictionary, embed_tokens):
+    
+        self.output_projection =torch.nn.Linear(
+            embed_tokens.embedding_dim,
+            classifier_cfg.num_steps_classifier_classes*classifier_cfg.num_steps , bias=False
         )
-        checkpoint = cfg.checkpoint_activations
+    def build_encoder_layer(self, transformer_cfg):
+        layer = transformer_layer.TransformerEncoderLayerBase(
+            transformer_cfg, return_fc=self.return_fc
+        )
+        checkpoint = transformer_cfg.checkpoint_activations
         if checkpoint:
-            offload_to_cpu = cfg.offload_activations
+            offload_to_cpu = transformer_cfg.offload_activations
             layer = checkpoint_wrapper(layer, offload_to_cpu=offload_to_cpu)
         # if we are checkpointing, enforce that FSDP always wraps the
         # checkpointed layer, regardless of layer size
-        min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
+        min_params_to_wrap = transformer_cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
-
+    def output_layer(self, features):
+        #print("features",features.shape)
+        
+        output= self.output_projection(features[0])
+        batch_size=output.size(0)
+        
+        return output.view(batch_size,self.classifier_cfg.num_steps_classifier_classes,self.classifier_cfg.num_steps )
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
     ):
@@ -138,8 +184,6 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        *,
-        index
     ):
         """
         Args:
@@ -164,8 +208,11 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
+        #src_tokens=src_tokens.permute(1,0,2)
+        # if token_embeddings is not None:
+        #     token_embeddings=token_embeddings.permute(1,0,2)
         return self.forward_scriptable(
-            src_tokens, src_lengths, return_all_hiddens, token_embeddings,index=index
+            src_tokens, src_lengths, return_all_hiddens, token_embeddings
         )
 
     # TorchScript doesn't support super() method so that the scriptable Subclass
@@ -178,8 +225,6 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        *,
-        index
     ):
         """
         Args:
@@ -230,9 +275,9 @@ class TransformerEncoderBase(FairseqEncoder):
             encoder_states.append(x)
 
         # encoder layers
-        for idx, layer in enumerate( self.layers):
+        for layer in self.layers:
             lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=index[idx]
+                x, encoder_padding_mask=encoder_padding_mask if has_pads else None
             )
 
             if isinstance(lr, tuple) and len(lr) == 2:
@@ -259,7 +304,9 @@ class TransformerEncoderBase(FairseqEncoder):
             .reshape(-1, 1)
             .contiguous()
         )
+        next_steps=self.output_layer(x)
         return {
+            "next_steps":[next_steps],
             "encoder_out": [x],  # T x B x C
             "encoder_padding_mask": [encoder_padding_mask],  # B x T
             "encoder_embedding": [encoder_embedding],  # B x T x C
@@ -268,64 +315,6 @@ class TransformerEncoderBase(FairseqEncoder):
             "src_tokens": [],
             "src_lengths": [src_lengths],
         }
-
-    @torch.jit.export
-    def reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
-        """
-        Reorder encoder output according to *new_order*.
-
-        Args:
-            encoder_out: output from the ``forward()`` method
-            new_order (LongTensor): desired order
-
-        Returns:
-            *encoder_out* rearranged according to *new_order*
-        """
-        if len(encoder_out["encoder_out"]) == 0:
-            new_encoder_out = []
-        else:
-            new_encoder_out = [encoder_out["encoder_out"][0].index_select(1, new_order)]
-        if len(encoder_out["encoder_padding_mask"]) == 0:
-            new_encoder_padding_mask = []
-        else:
-            new_encoder_padding_mask = [
-                encoder_out["encoder_padding_mask"][0].index_select(0, new_order)
-            ]
-        if len(encoder_out["encoder_embedding"]) == 0:
-            new_encoder_embedding = []
-        else:
-            new_encoder_embedding = [
-                encoder_out["encoder_embedding"][0].index_select(0, new_order)
-            ]
-
-        if len(encoder_out["src_tokens"]) == 0:
-            src_tokens = []
-        else:
-            src_tokens = [(encoder_out["src_tokens"][0]).index_select(0, new_order)]
-
-        if len(encoder_out["src_lengths"]) == 0:
-            src_lengths = []
-        else:
-            src_lengths = [(encoder_out["src_lengths"][0]).index_select(0, new_order)]
-
-        encoder_states = encoder_out["encoder_states"]
-        if len(encoder_states) > 0:
-            for idx, state in enumerate(encoder_states):
-                encoder_states[idx] = state.index_select(1, new_order)
-
-        return {
-            "encoder_out": new_encoder_out,  # T x B x C
-            "encoder_padding_mask": new_encoder_padding_mask,  # B x T
-            "encoder_embedding": new_encoder_embedding,  # B x T x C
-            "encoder_states": encoder_states,  # List[T x B x C]
-            "src_tokens": src_tokens,  # B x T
-            "src_lengths": src_lengths,  # B x 1
-        }
-
-    @torch.jit.export
-    def _reorder_encoder_out(self, encoder_out: Dict[str, List[Tensor]], new_order):
-        """Dummy re-order function for beamable enc-dec attention"""
-        return encoder_out
 
     def max_positions(self):
         """Maximum input length supported by the encoder."""
@@ -348,46 +337,128 @@ class TransformerEncoderBase(FairseqEncoder):
             self.normalize = False
             state_dict[version_key] = torch.Tensor([1])
         return state_dict
-
-
-class TransformerEncoder(TransformerEncoderBase):
-    def __init__(self, args, dictionary, embed_tokens, return_fc=False):
-        self.args = args
+class TransformerEncoderStepsClassifier(TransformerStepsClassifierBase):
+    def __init__(self, transformer_cfg, dictionary, embed_tokens, return_fc=False):
+      
+        #print(transformer_cfg.encoder_steps_classifier is None)
         super().__init__(
-            TransformerConfig.from_namespace(args),
+           transformer_cfg,
+           transformer_cfg.encoder,
             dictionary,
             embed_tokens,
             return_fc=return_fc,
         )
-        self.next_steps_classifier = TransformerEncoderStepsClassifier(args, dictionary,embed_tokens)
 
-        
-
-    def build_encoder_layer(self, args):
-        return super().build_encoder_layer(
-            TransformerConfig.from_namespace(args),
-        )
-    def forward(
-        self,
-        src_tokens,
-        src_lengths: Optional[torch.Tensor] = None,
-        return_all_hiddens: bool = False,
-        token_embeddings: Optional[torch.Tensor] = None,
-    ):
-        next_steps=self.next_steps_classifier(src_tokens,src_lengths)["next_steps"][0]
-        next_steps=NextSteps(next_steps)
-        return super().forward(
-            src_tokens,
-            src_lengths=src_lengths,
-            return_all_hiddens=return_all_hiddens,
-            token_embeddings=token_embeddings,
-            index=next_steps.indices
+class TransformerDecoderStepsClassifier(TransformerStepsClassifierBase):
+    def __init__(self, transformer_cfg, dictionary, embed_tokens, return_fc=False):
+       
+        super().__init__(
+           transformer_cfg,
+           transformer_cfg.decoder,
+            dictionary,
+            embed_tokens,
+            return_fc=return_fc,
         )
         
-# class TransformerEncoderSection(nn.Module):
-#     def __init__(self, args, dictionary, embed_tokens, return_fc=False):
-#         self.encoder=TransformerEncoder(args,dictionary,embed_tokens,return_fc=return_fc)
+    # def forward_scriptable(
+    #     self,
+    #     src_tokens=None,
+    #     src_lengths: Optional[torch.Tensor] = None,
+    #     return_all_hiddens: bool = False,
+    #     token_embeddings: Optional[torch.Tensor] = None,
+    # ):
+    #     """
+    #     Args:
+    #         src_tokens (LongTensor): tokens in the source language of shape
+    #             `(batch, src_len)`
+    #         src_lengths (torch.LongTensor): lengths of each source sentence of
+    #             shape `(batch)`
+    #         return_all_hiddens (bool, optional): also return all of the
+    #             intermediate hidden states (default: False).
+    #         token_embeddings (torch.Tensor, optional): precomputed embeddings
+    #             default `None` will recompute embeddings
+
+    #     Returns:
+    #         dict:
+    #             - **encoder_out** (Tensor): the last encoder layer's output of
+    #               shape `(src_len, batch, embed_dim)`
+    #             - **encoder_padding_mask** (ByteTensor): the positions of
+    #               padding elements of shape `(batch, src_len)`
+    #             - **encoder_embedding** (Tensor): the (scaled) embedding lookup
+    #               of shape `(batch, src_len, embed_dim)`
+    #             - **encoder_states** (List[Tensor]): all intermediate
+    #               hidden states of shape `(src_len, batch, embed_dim)`.
+    #               Only populated if *return_all_hiddens* is True.
+    #     """
+    #     # compute padding mask
         
-#         self.next_step_classifier=NextStepClassifier(args,embed_tokens) 
-#         self.restored_steps=RestoredSteps(args,embed_tokens)
-#     def 
+      
+
+    #     # encoder_padding_mask = src_tokens.eq(self.padding_idx)
+    #     # has_pads = (
+    #     #     torch.tensor(src_tokens.device.type == "xla") or encoder_padding_mask.any()
+    #     # )
+    #     # # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
+    #     # if torch.jit.is_scripting():
+    #     #     has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
+
+    #     # x, encoder_embedding = self.forward_embedding(src_tokens, token_embeddings)
+
+    #     # # account for padding while computing the representation
+    #     # x = x * (
+    #     #     1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
+    #     # )
+
+    #     # # B x T x C -> T x B x C
+    #     # x = x.transpose(0, 1)
+    #     x=token_embeddings
+    #     print(x.shape)
+
+    #     encoder_states = []
+    #     fc_results = []
+
+    #     if return_all_hiddens:
+    #         encoder_states.append(x)
+    #     #encoder_padding_mask=torch.zeros(x.size(0),x.size(1)).to(x.device)
+    #     # encoder layers
+    #     for layer in self.layers:
+    #         lr = layer(
+    #             #x, encoder_padding_mask=encoder_padding_mask if has_pads else None
+    #             x, encoder_padding_mask=None
+    #         )
+
+    #         if isinstance(lr, tuple) and len(lr) == 2:
+    #             x, fc_result = lr
+    #         else:
+    #             x = lr
+    #             fc_result = None
+
+    #         if return_all_hiddens and not torch.jit.is_scripting():
+    #             assert encoder_states is not None
+    #             encoder_states.append(x)
+    #             fc_results.append(fc_result)
+
+    #     if self.layer_norm is not None:
+    #         x = self.layer_norm(x)
+
+    #     # The Pytorch Mobile lite interpreter does not supports returning NamedTuple in
+    #     # `forward` so we use a dictionary instead.
+    #     # TorchScript does not support mixed values so the values are all lists.
+    #     # The empty list is equivalent to None.
+    #     # src_lengths = (
+    #     #     src_tokens.ne(self.padding_idx)
+    #     #     .sum(dim=1, dtype=torch.int32)
+    #     #     .reshape(-1, 1)
+    #     #     .contiguous()
+    #     # )
+    #     next_steps=self.output_layer(x)
+    #     return {
+    #         "next_steps":[next_steps],
+    #         "encoder_out": [x],  # T x B x C
+    #         # "encoder_padding_mask": [encoder_padding_mask],  # B x T
+    #         # "encoder_embedding": [encoder_embedding],  # B x T x C
+    #         "encoder_states": encoder_states,  # List[T x B x C]
+    #         "fc_results": fc_results,  # List[T x B x C]
+    #         "src_tokens": [],
+    #         #"src_lengths": [src_lengths],
+    #     }

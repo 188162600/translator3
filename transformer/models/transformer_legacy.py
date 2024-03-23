@@ -8,13 +8,13 @@ from fairseq.models import (
     register_model,
     register_model_architecture,
 )
-from models.transformer_config import (
+from ..models.transformer_config import (
     TransformerConfig,
     DEFAULT_MAX_SOURCE_POSITIONS,
     DEFAULT_MAX_TARGET_POSITIONS,
     DEFAULT_MIN_PARAMS_TO_WRAP,
 )
-from models.transformer_base import (
+from ..models.transformer_base import (
     TransformerModelBase,
 )
 
@@ -129,6 +129,7 @@ class TransformerModel(TransformerModelBase):
             args.min_params_to_wrap = getattr(
                 args, "min_params_to_wrap", DEFAULT_MIN_PARAMS_TO_WRAP
             )
+        #print("from transformer_legacy.py")
         cfg = TransformerConfig.from_namespace(args)
         return super().build_model(cfg, task)
 
