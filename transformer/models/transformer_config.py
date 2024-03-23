@@ -21,7 +21,7 @@ DEFAULT_MIN_PARAMS_TO_WRAP = int(1e8)
 
 _NAME_PARSER = r"(decoder|encoder|quant_noise)_(.*)"
 
-
+from fairseq.dataclass import FairseqDataclass
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
     
@@ -56,6 +56,9 @@ class EncDecBaseConfig(FairseqDataclass):
             "help": "config for xFormers attention, defined in xformers.components.attention.AttentionConfig"
         },
     )
+    # def __setattr__(self, __name: str, __value: re.Any) -> None:
+    #     if isinstance(__value,)
+    #     return super().__setattr__(__name, __value)
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     
@@ -175,14 +178,14 @@ class TransformerConfig(FairseqDataclass):
     )
     adaptive_input: bool = False
     #encoder_steps_classifier:EncoderStepsClassifierConfig=EncoderStepsClassifierConfig()
-    encoder: SelectiveEncDecBaseConfig = None#SelectiveEncDecBaseConfig()
+    encoder: SelectiveEncDecBaseConfig =field(default_factory=SelectiveEncDecBaseConfig)# None#SelectiveEncDecBaseConfig()
     # TODO should really be in the encoder config
     max_source_positions: int = field(
         default=DEFAULT_MAX_SOURCE_POSITIONS,
         metadata={"help": "Maximum input length supported by the encoder"},
     )
    # decoder_steps_classifier:DecoderStepsClassifierConfig=DecoderStepsClassifierConfig()
-    decoder: SelectiveDecoderConfig = None#SelectiveDecoderConfig()
+    decoder: SelectiveDecoderConfig = field(default_factory=SelectiveDecoderConfig) #None#SelectiveDecoderConfig()
     # TODO should really be in the decoder config
     max_target_positions: int = field(
         default=DEFAULT_MAX_TARGET_POSITIONS,
@@ -262,7 +265,7 @@ class TransformerConfig(FairseqDataclass):
         default=False, metadata={"help": "perform cross+self-attention"}
     )
     # args for Training with Quantization Noise for Extreme Model Compression ({Fan*, Stock*} et al., 2020)
-    quant_noise: QuantNoiseConfig =field(default= None) #field(default=QuantNoiseConfig())
+    quant_noise: QuantNoiseConfig =field(default_factory=QuantNoiseConfig) #field(default=QuantNoiseConfig())
     min_params_to_wrap: int = field(
         default=DEFAULT_MIN_PARAMS_TO_WRAP,
         metadata={
