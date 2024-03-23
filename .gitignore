@@ -1,5 +1,5 @@
 checkpoints
-data-bin
+#data-bin
 cli/orig
 cli/subword-nmt
 cli/wmt17_en_de
