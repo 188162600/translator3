@@ -80,6 +80,9 @@ for ((i=0;i<${#URLS[@]};++i)); do
             tar zxvf $file
         elif [ ${file: -4} == ".tar" ]; then
             tar xvf $file
+        elif [${file:-4}==".zip"]; then
+            unzip $file
+            
         fi
     fi
 done
@@ -134,9 +137,8 @@ for L in $src $tgt; do
     done
 done
 
-perl $CLEAN -ratio 1.5 $tmp/bpe.train $src $tgt $prep/train 1 250
-perl $CLEAN -ratio 1.5 $tmp/bpe.valid $src $tgt $prep/valid 1 250
-
+perl $CLEAN  $tmp/bpe.train $src $tgt $prep/train 1 4000
+perl $CLEAN  $tmp/bpe.valid $src $tgt $prep/valid 1 4000
 for L in $src $tgt; do
     cp $tmp/bpe.test.$L $prep/test.$L
 done

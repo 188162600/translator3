@@ -1,4 +1,5 @@
 
+from typing import Mapping
 import torch
 from torch import Tensor
 from torch.nn.parameter import Parameter, UninitializedParameter
@@ -10,7 +11,7 @@ import torch
 from torch import Tensor
 from torch.nn import Module, Parameter, init
 import math
-
+from typing import Any, Tuple
 class SelectiveLinear(Module):
     def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True,batch_index:int=0, device=None,
                  dtype=None) -> None:
@@ -62,7 +63,19 @@ class SelectiveLinear(Module):
 
     def extra_repr(self) -> str:
         return f'num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
-
+    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
+        if "weight" in state_dict:
+            weight=state_dict["weight"]
+            if weight.dim()==2:
+                weight=weight.unsqueeze(0).expand(self.num_options,-1,-1)
+                state_dict["weight"]=weight
+        if "bias" in state_dict:
+            bias=state_dict["bias"]
+            if bias.dim()==1:
+                bias=bias.unsqueeze(0).expand(self.num_options,-1)
+                state_dict["bias"]=bias
+            
+        return super().load_state_dict(state_dict, strict)
 
 # class SelectiveLinear2d(Module):
 #     def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True, device=None, dtype=None) -> None:
