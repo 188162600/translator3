@@ -63,19 +63,42 @@ class SelectiveLinear(Module):
 
     def extra_repr(self) -> str:
         return f'num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
-    def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
-        if "weight" in state_dict:
-            weight=state_dict["weight"]
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+        weight_key = prefix + 'weight'
+        bias_key = prefix + 'bias'
+        if weight_key  in state_dict:
+            
+            weight=state_dict[weight_key] 
+            print("weight.shape",weight.shape)
             if weight.dim()==2:
                 weight=weight.unsqueeze(0).expand(self.num_options,-1,-1)
-                state_dict["weight"]=weight
-        if "bias" in state_dict:
-            bias=state_dict["bias"]
+               
+                state_dict[weight_key]=weight
+                
+        if bias_key  in state_dict:
+            bias=state_dict[bias_key]
+            print("bias.shape",bias.shape)
             if bias.dim()==1:
                 bias=bias.unsqueeze(0).expand(self.num_options,-1)
-                state_dict["bias"]=bias
+                
+                state_dict[bias_key]=bias
+        return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+         
+    # def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
+       
+    #     if "weight" in state_dict:
+    #         weight=state_dict["weight"]
+    #         if weight.dim()==2:
+    #             weight=weight.unsqueeze(0).expand(self.num_options,-1,-1)
+    #             state_dict["weight"]=weight
+    #     if "bias" in state_dict:
+    #         bias=state_dict["bias"]
+    #         if bias.dim()==1:
+    #             bias=bias.unsqueeze(0).expand(self.num_options,-1)
+    #             state_dict["bias"]=bias
             
-        return super().load_state_dict(state_dict, strict)
+    #     return super().load_state_dict(state_dict, strict)
 
 # class SelectiveLinear2d(Module):
 #     def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True, device=None, dtype=None) -> None:

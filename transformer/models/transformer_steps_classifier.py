@@ -4,11 +4,12 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+from ..nn.transformer_layer import TransformerEncoderLayerBase
 
 from fairseq import utils
 from fairseq.distributed import fsdp_wrap
@@ -20,7 +21,7 @@ from fairseq.modules import (
     LayerNorm,
     PositionalEmbedding,
     SinusoidalPositionalEmbedding,
-    transformer_layer,
+    #transformer_layer,
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
@@ -143,7 +144,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             classifier_cfg.num_steps_classifier_classes*classifier_cfg.num_steps , bias=False
         )
     def build_encoder_layer(self, transformer_cfg):
-        layer = transformer_layer.TransformerEncoderLayerBase(
+        layer = TransformerEncoderLayerBase(
             transformer_cfg, return_fc=self.return_fc
         )
         checkpoint = transformer_cfg.checkpoint_activations
@@ -337,6 +338,8 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.normalize = False
             state_dict[version_key] = torch.Tensor([1])
         return state_dict
+    # def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
+    #     return super().load_state_dict(state_dict, strict)
 class TransformerEncoderStepsClassifier(TransformerStepsClassifierBase):
     def __init__(self, transformer_cfg, dictionary, embed_tokens, return_fc=False):
       

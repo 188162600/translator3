@@ -2,7 +2,17 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
+"""
+Base classes for various fairseq models.
+"""
 
+import logging
+from fairseq import checkpoint_utils
+logger = logging.getLogger(__name__)
 from fairseq.dataclass.utils import gen_parser_from_dataclass
 from fairseq.models import (
     register_model,
@@ -75,9 +85,16 @@ class TransformerModel(TransformerModelBase):
         # fmt: on
 
     def __init__(self, args, encoder, decoder):
+       
         cfg = TransformerConfig.from_namespace(args)
         super().__init__(cfg, encoder, decoder)
         self.args = args
+        
+        if hasattr(args, "pretrained_transformer_check_point") and args.pretrained_transformer_check_point:
+            state=checkpoint_utils.load_checkpoint_to_cpu(args.pretrained_transformer_check_point)
+          #state = checkpoint_utils.load_checkpoint_to_cpu(pretrained_xlm_checkpoint)
+            print("state",state["model"].keys())
+            self.load_state_dict(state["model"],strict=False)
 
     @classmethod
     def add_args(cls, parser):
@@ -86,6 +103,9 @@ class TransformerModel(TransformerModelBase):
         # do not set defaults so that settings defaults from various architectures still works
         gen_parser_from_dataclass(
             parser, TransformerConfig(), delete_default=True, with_prefix=""
+        )
+        parser.add_argument(
+            "--pretrained_transformer_check_point",default=None, type=str, help="path to the pretrained transformer model"
         )
 
     @classmethod
@@ -150,6 +170,46 @@ class TransformerModel(TransformerModelBase):
         return super().build_decoder(
             TransformerConfig.from_namespace(args), tgt_dict, embed_tokens
         )
+    @classmethod
+    def from_pretrained(
+        cls,
+        model_name_or_path,
+        checkpoint_file="model.pt",
+        data_name_or_path=".",
+        **kwargs,
+    ):
+        """
+        Load a :class:`~fairseq.models.FairseqModel` from a pre-trained model
+        file. Downloads and caches the pre-trained model file if needed.
+
+        The base implementation returns a
+        :class:`~fairseq.hub_utils.GeneratorHubInterface`, which can be used to
+        generate translations or sample from language models. The underlying
+        :class:`~fairseq.models.FairseqModel` can be accessed via the
+        *generator.models* attribute.
+
+        Other models may override this to implement custom hub interfaces.
+
+        Args:
+            model_name_or_path (str): either the name of a pre-trained model to
+                load or a path/URL to a pre-trained model state dict
+            checkpoint_file (str, optional): colon-separated list of checkpoint
+                files in the model archive to ensemble (default: 'model.pt')
+            data_name_or_path (str, optional): point args.data to the archive
+                at the given path/URL. Can start with '.' or './' to reuse the
+                model archive path.
+        """
+        from fairseq import hub_utils
+
+        x = hub_utils.from_pretrained(
+            model_name_or_path,
+            checkpoint_file,
+            data_name_or_path,
+            archive_map=cls.hub_models(),
+            **kwargs,
+        )
+        logger.info(x["args"])
+        return hub_utils.GeneratorHubInterface(x["args"], x["task"], x["models"])
 
 
 # architectures
@@ -246,7 +306,7 @@ def transformer_wmt_en_de(args):
 @register_model_architecture("meta_transformer", "meta_transformer_vaswani_wmt_en_de_big")
 def transformer_vaswani_wmt_en_de_big(args):
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 1024)
-    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 4096)
+    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 8192)
     args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 16)
     args.encoder_normalize_before = getattr(args, "encoder_normalize_before", False)
     args.decoder_embed_dim = getattr(args, "decoder_embed_dim", 1024)
