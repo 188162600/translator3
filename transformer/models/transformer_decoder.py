@@ -16,7 +16,7 @@ from fairseq.models import FairseqIncrementalDecoder
 
 from ..nn.selective_linear import SelectiveLinear
 from ..nn import selective_transformer_layer
-
+from ..nn.confidence_loss import confidence_loss
 from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier,NextSteps
 from ..models.transformer_config import TransformerConfig
 
@@ -122,9 +122,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layers = LayerDropModuleList(p=self.decoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
+        shared_layer=self.build_decoder_layer(cfg, no_encoder_attn)
         self.layers.extend(
             [
-                self.build_decoder_layer(cfg, no_encoder_attn)
+                shared_layer
                 for _ in range(cfg.decoder.layers)
             ]
         )
@@ -211,7 +212,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
         *,
-        index
+        next_steps
     ):
         """
         Args:
@@ -232,6 +233,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
         #print("transformer_decoder.py:forward",prev_output_tokens.shape,index.shape)
+        index=next_steps.get_indices()
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -244,6 +246,11 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         #print("forward index",index.shape)
         if not features_only:
             x = self.output_layer(x,index)
+        @torch.enable_grad()
+        def backward_steps_classifier(grad):
+            confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
+            #((grad.detach().sum())*next_steps.get_confidence().mean()).backward()
+        x.register_hook(backward_steps_classifier)
         return x, extra
 
     def extract_features(
@@ -510,7 +517,7 @@ class TransformerDecoder(TransformerDecoderBase):
         # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
         
         next_steps=self.next_steps_classifier.forward(src_tokens=prev_output_tokens,src_lengths=src_lengths)["next_steps"][0]
-        next_steps=NextSteps(next_steps)
+        #next_steps=NextSteps(next_steps)
         # print(prev_output_tokens.shape)
         # print("input",prev_output_tokens.shape)
         # print("next_steps",next_steps.get_indices().shape)
@@ -524,7 +531,7 @@ class TransformerDecoder(TransformerDecoderBase):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            index=next_steps.get_indices()
+            next_steps=next_steps
         )
         
 # class TransformerDecoderSection(nn.Module):
@@ -535,6 +542,6 @@ class TransformerDecoder(TransformerDecoderBase):
 #         output_projection=None) -> None:
 #         self.transformer_encoder=TransformerDecoder(args,dictionary,embed_tokens,no_encoder_attn,output_projection)
 #         self.cfg=self.transformer_encoder.cfg
-#         #self.next_steps_classifier_encoder=NextStepsClassifierEncoder(args,dictionary,embed_tokens,no_encoder_attn,output_projection)
+#         #self.forward_classifier_encoder=NextStepsClassifierEncoder(args,dictionary,embed_tokens,no_encoder_attn,output_projection)
       
      

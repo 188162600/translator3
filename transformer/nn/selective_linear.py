@@ -44,6 +44,7 @@ class SelectiveLinear(Module):
 
         batch_size=input.size(self.batch_index)
        # print("batch_size",input.shape, batch_size, index.shape)
+        #print(index.shape)
         assert batch_size == index.size(0), "Input batch size and index size should match"
 
         # Select weights and biases for each item in the batch based on the index
@@ -52,6 +53,7 @@ class SelectiveLinear(Module):
 
         # Reshape input to [batch_size, other_dims, in_features] for batch matrix multiplication
         input_reshaped = input.reshape(-1, self.in_features)  # Flatten input while keeping the last dimension
+        #print(input_reshaped.view(batch_size, -1, self.in_features).shape, selected_weight.transpose(1, 2).shape)
         output = torch.bmm(input_reshaped.view(batch_size, -1, self.in_features), selected_weight.transpose(1, 2))
 
         if selected_bias is not None:
@@ -69,7 +71,7 @@ class SelectiveLinear(Module):
         if weight_key  in state_dict:
             
             weight=state_dict[weight_key] 
-            print("weight.shape",weight.shape)
+            #print("weight.shape",weight.shape)
             if weight.dim()==2:
                 weight=weight.unsqueeze(0).expand(self.num_options,-1,-1)
                
@@ -77,7 +79,7 @@ class SelectiveLinear(Module):
                 
         if bias_key  in state_dict:
             bias=state_dict[bias_key]
-            print("bias.shape",bias.shape)
+            #print("bias.shape",bias.shape)
             if bias.dim()==1:
                 bias=bias.unsqueeze(0).expand(self.num_options,-1)
                 

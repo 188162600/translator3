@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from ..nn.selective_transformer_layer import SelectiveTransformerEncoderLayerBase
+from ..nn.confidence_loss import confidence_loss
 from fairseq import utils
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoder
@@ -93,8 +94,12 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
+        shared_layer=self.build_encoder_layer(cfg)
         self.layers.extend(
-            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)]
+            [
+                shared_layer
+                for i in range(cfg.encoder.layers)
+            ]
         )
         self.num_layers = len(self.layers)
 
@@ -142,7 +147,7 @@ class TransformerEncoderBase(FairseqEncoder):
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
         *,
-        index
+        next_steps
     ):
         """
         Args:
@@ -169,7 +174,7 @@ class TransformerEncoderBase(FairseqEncoder):
         """
         #print("encoder input",src_tokens.shape)
         return self.forward_scriptable(
-            src_tokens, src_lengths, return_all_hiddens, token_embeddings,index=index
+            src_tokens, src_lengths, return_all_hiddens, token_embeddings,next_steps=next_steps
         )
 
     # TorchScript doesn't support super() method so that the scriptable Subclass
@@ -182,7 +187,7 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        index=None
+        next_steps=None
     ):
         
         """
@@ -208,6 +213,7 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
+        index=next_steps.get_indices()
         assert index is not None
         
         # compute padding mask
@@ -237,6 +243,7 @@ class TransformerEncoderBase(FairseqEncoder):
 
         # encoder layers
         #print("index",index.shape,x.shape)
+        
         for idx, layer in enumerate( self.layers):
             
             lr = layer(
@@ -261,6 +268,11 @@ class TransformerEncoderBase(FairseqEncoder):
         # `forward` so we use a dictionary instead.
         # TorchScript does not support mixed values so the values are all lists.
         # The empty list is equivalent to None.
+        @torch.enable_grad()
+        def backward_steps_classifier(grad):
+            confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
+           
+        x.register_hook(backward_steps_classifier)
         src_lengths = (
             src_tokens.ne(self.padding_idx)
             .sum(dim=1, dtype=torch.int32)
@@ -380,7 +392,7 @@ class TransformerEncoder(TransformerEncoderBase):
         token_embeddings: Optional[torch.Tensor] = None,
     ):
         next_steps=self.next_steps_classifier(src_tokens,src_lengths)["next_steps"][0]
-        next_steps=NextSteps(next_steps)
+        #next_steps=NextSteps(next_steps)
         # print("en input",src_tokens.shape)
         # print("en next_steps",next_steps.get_indices().shape)
         return super().forward(
@@ -388,7 +400,7 @@ class TransformerEncoder(TransformerEncoderBase):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
             token_embeddings=token_embeddings,
-            index=next_steps.get_indices()
+            next_steps=next_steps
         )
         
 # class TransformerEncoderSection(nn.Module):

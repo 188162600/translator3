@@ -20,7 +20,14 @@ DEFAULT_MAX_TARGET_POSITIONS = 1024
 DEFAULT_MIN_PARAMS_TO_WRAP = int(1e8)
 
 _NAME_PARSER = r"(decoder|encoder|quant_noise)_(.*)"
-
+def _get_total_options(sharing_method:str,num_total,num_shared,num_non_shared,num_steps)->int:
+    if sharing_method=="none":
+        return num_steps*num_total
+    elif sharing_method=="random":
+        return num_non_shared*num_steps
+    elif sharing_method=="cycle_rev":
+        return num_non_shared*num_steps/2+num_total*num_steps/2
+    
 from fairseq.dataclass import FairseqDataclass
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
@@ -61,12 +68,27 @@ class EncDecBaseConfig(FairseqDataclass):
     #     return super().__setattr__(__name, __value)
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
-    
-    num_options:int = field(
+    sharing_method: str = field(
+        default="random", metadata={"help": "sharing method"}
+    )
+    options_each_layer:int = field(
         default=4,metadata={"help":"number of options"}
     )
-    num_steps_classifier_classes:int = field(
-        default=II("model.encoder.num_options"),
+    shared_options_each_layer:int = field(
+        default=2,metadata={"help":"number of shared options in each layer"}
+    )
+    
+    
+    total_options:int=None
+    steps_classifier_shared_classes:int = field(
+        default=II("model.encoder.shared_options_each_layer"),
+    )
+    steps_classifier_non_shared_classes:int = field(
+        default=II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"),
+    )
+    
+    steps_classifier_classes:int = field(
+        default=II("model.encoder.options_each_layer"),
         metadata={"help":"number of classes in the classifier"}
     )
     num_steps:int = field(
@@ -78,8 +100,15 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
         #super().__post_init__()
         if self.num_steps == II("model.encoder.layers"):
             self.num_steps = self.layers
-        if self.num_steps_classifier_classes == II("model.encoder.num_options"):
-            self.num_steps_classifier_classes = self.num_options
+        if self.steps_classifier_classes == II("model.encoder.options_each_layer"):
+            self.steps_classifier_classes = self.options_each_layer
+        if self.steps_classifier_shared_classes == II("model.encoder.shared_options_each_layer"):
+            self.steps_classifier_shared_classes = self.shared_options_each_layer
+        if self.steps_classifier_non_shared_classes == II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"):
+            self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
+        #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
+        if self.total_options is None:
+            self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
         
     
     # num_encoder_layers:int = field(
@@ -92,7 +121,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
 #     layers:int = field(
 #         default=2,metadata={"help":"number of decoder layers"}
 #     )
-#     num_steps_classifier_classes:int=II("model.encoder.num_options")
+#     steps_classifier_classes:int=II("model.encoder.num_options")
 #     num_steps:int=II("model.encoder.layers")
 
 # @dataclass
@@ -100,7 +129,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
 #     layers:int = field(
 #         default=4,metadata={"help":"number of decoder layers"}
 #     )
-#     num_steps_classifier_classes:int=II("model.decoder.num_options")
+#     steps_classifier_classes:int=II("model.decoder.num_options")
 #     num_steps:int=field(
 #         default=II("model.decoder.layers+2"),
 #         metadata={"help":"number of decoder layers+embedding and output layers"}
@@ -125,19 +154,44 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
     )
    
     num_steps:int = field(
-        default=II("model.encoder.layers+2"),
+        default=II("model.decoder.layers+2"),
         metadata={"help":"layers+embedding and output layers"}
     )
+    total_options:int=None
+    steps_classifier_shared_classes:int = field(
+        default=II("model.decoder.shared_options_each_layer"),
+    )
+    steps_classifier_non_shared_classes:int = field(
+        default=II("model.decoder.options_each_layer-model.decoder.shared_options_each_layer"),
+    )
+    
+    steps_classifier_classes:int = field(
+        default=II("model.decoder.options_each_layer"),
+        metadata={"help":"number of classes in the classifier"}
+    )
+   
     
     def __post_init__(self):
-        super().__post_init__()
+        
         #  II doesn't work if we are just creating the object outside of hydra so fix that
         if self.input_dim == II("model.decoder.embed_dim"):
             self.input_dim = self.embed_dim
         if self.output_dim == II("model.decoder.embed_dim"):
             self.output_dim = self.embed_dim
-        if self.num_steps == II("model.encoder.layers+2"):
+        if self.num_steps == II("model.decoder.layers+2"):
             self.num_steps = self.layers+2
+            
+
+        if self.steps_classifier_classes == II("model.decoder.options_each_layer"):
+            self.steps_classifier_classes = self.options_each_layer
+        if self.steps_classifier_shared_classes == II("model.decoder.shared_options_each_layer"):
+            self.steps_classifier_shared_classes = self.shared_options_each_layer
+        if self.steps_classifier_non_shared_classes == II("model.decoder.options_each_layer-model.decoder.shared_options_each_layer"):
+            self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
+        super().__post_init__()
+        # if self.total_options is None:
+        #     self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
+        
         
 
 

@@ -53,18 +53,30 @@ class NextSteps:
         if self._indices is None:
             self._indices = torch.argmax(self.tensor,dim=1)
         return self._indices
+   
     def get_softmax(self):
+        #print(torch.is_grad_enabled())
         if self._softmax is None:
-            self._softmax = torch.softmax(self.tensor, dim=1)
+            #print(self.tensor.grad_fn,"tensor grad_fn",torch.nn.functional.softmax(self.tensor, dim=1).grad_fn)
+            softmax_result_immediate = torch.nn.functional.softmax(self.tensor, dim=1)
+            #print(f"Immediate softmax grad_fn: {softmax_result_immediate.grad_fn}")
+            self._softmax = torch.nn.functional.softmax(self.tensor, dim=1)
+           # print(self._softmax.grad_fn,"softmax grad_fn2")
         return self._softmax
+   
     def get_probability(self):
         if self._probability is None:
             expanded_indices = self.get_indices().unsqueeze(-1)
-            self._probability = torch.gather(self.get_softmax(), 1,expanded_indices).squeeze(-1)
+            self._probability = torch. gather(self.get_softmax(), 1,expanded_indices).squeeze(-1)
+            # print(self._probability.grad_fn,"grad_fn")
+            # print(self.tensor.grad_fn,"grad_fn2")
+            # print(self._softmax.grad_fn,"grad_fn3")
         return self._probability
+   
     def get_confidence(self):
         if self._confidence is None:
             self._confidence=torch.sum(self.get_probability(),dim=1)
+        #print(self._confidence.grad_fn,"conf")
         return self._confidence
 class TransformerStepsClassifierBase(FairseqEncoder):
     """
@@ -136,12 +148,58 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         else:
             self.layer_norm = None
         self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
+        self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
+    def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
         
+        
+        total_new=0
+       
+        self.index_mapping=torch.nn.Parameter( torch.zeros(classifier_cfg.steps_classifier_classes,classifier_cfg.num_steps,dtype=torch.long),requires_grad=False)
+        #self.register_buffer("index_mapping", self.index_mapping)
+        def build_index(index,num_new,num_shared=0,index_shared=None):
+            if index_shared is not None:
+                assert 0<=index_shared<index<classifier_cfg.num_steps
+            else:
+                assert 0<=index<classifier_cfg.num_steps
+            #assert num_new+num_shared==classifier_cfg.steps_classifier_classes
+            
+                
+            self. index_mapping[0:num_new,index]= torch.arange(total_new,total_new+num_new)
+            if num_shared>0:
+                self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
+            #self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
+     
+        def build_random_index(index,num_random,starts_at):
+            self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.steps_classifier_classes)[:num_random]    
+        
+           
+        if classifier_cfg.sharing_method=="none":
+            self.index_mapping=None
+        if classifier_cfg.sharing_method=="cycle_rev":
+            assert classifier_cfg.num_steps%2==0
+            for i in range( classifier_cfg.num_steps//2):
+                build_index(i,num_new=classifier_cfg.steps_classifier_classes)
+            new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
+            for i in range(classifier_cfg.num_steps//2,classifier_cfg.num_steps):
+                build_index(i,num_new=new,num_shared=classifier_cfg.steps_classifier_shared_classes,index_shared=classifier_cfg.num_steps-i-1)
+        if classifier_cfg.sharing_method=="random":
+            new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
+            for i in range(classifier_cfg.num_steps):
+                build_index(i,num_new=new)
+            for i in range(classifier_cfg.num_steps):
+                build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
+        classifier_cfg.total_options=total_new
+            
+               
+          
+            
+        
+            
     def build_output_projection(self,  transformer_cfg, classifier_cfg, dictionary, embed_tokens):
     
         self.output_projection =torch.nn.Linear(
             embed_tokens.embedding_dim,
-            classifier_cfg.num_steps_classifier_classes*classifier_cfg.num_steps , bias=False
+            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps , bias=False
         )
     def build_encoder_layer(self, transformer_cfg):
         layer = TransformerEncoderLayerBase(
@@ -162,7 +220,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         output= self.output_projection(features[0])
         batch_size=output.size(0)
         
-        return output.view(batch_size,self.classifier_cfg.num_steps_classifier_classes,self.classifier_cfg.num_steps )
+        return output.view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps )
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
     ):
@@ -306,6 +364,12 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             .contiguous()
         )
         next_steps=self.output_layer(x)
+        next_steps=NextSteps(next_steps)
+        #print("next_steps",next_steps.get_indices().shape,self.index_mapping.shape)
+        if self.index_mapping is not None:
+            next_steps._indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
+            #next_steps._indices= next_steps.get_indices()[self.index_mapping]
+        
         return {
             "next_steps":[next_steps],
             "encoder_out": [x],  # T x B x C
@@ -330,7 +394,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.layers[i].upgrade_state_dict_named(
                 state_dict, "{}.layers.{}".format(name, i)
             )
-
+     
         version_key = "{}.version".format(name)
         if utils.item(state_dict.get(version_key, torch.Tensor([1]))[0]) < 2:
             # earlier checkpoints did not normalize after the stack of layers
@@ -338,6 +402,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.normalize = False
             state_dict[version_key] = torch.Tensor([1])
         return state_dict
+    
     # def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
     #     return super().load_state_dict(state_dict, strict)
 class TransformerEncoderStepsClassifier(TransformerStepsClassifierBase):
