@@ -22,11 +22,11 @@ DEFAULT_MIN_PARAMS_TO_WRAP = int(1e8)
 _NAME_PARSER = r"(decoder|encoder|quant_noise)_(.*)"
 def _get_total_options(sharing_method:str,num_total,num_shared,num_non_shared,num_steps)->int:
     if sharing_method=="none":
-        return num_steps*num_total
+        return int(num_steps*num_total)
     elif sharing_method=="random":
-        return num_non_shared*num_steps
+        return int(num_non_shared*num_steps)
     elif sharing_method=="cycle_rev":
-        return num_non_shared*num_steps/2+num_total*num_steps/2
+        return int(num_non_shared*num_steps/2+num_total*num_steps/2)
     
 from fairseq.dataclass import FairseqDataclass
 @dataclass
@@ -69,7 +69,7 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
-        default="random", metadata={"help": "sharing method"}
+        default="cycle_rev", metadata={"help": "sharing method"}
     )
     options_each_layer:int = field(
         default=4,metadata={"help":"number of options"}
@@ -109,7 +109,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
         #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
         if self.total_options is None:
             self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        
+            print(self.total_options,"total options")
     
     # num_encoder_layers:int = field(
     #     default=1,metadata={"help":"number of encoder layers"}

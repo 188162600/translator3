@@ -188,7 +188,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
                 build_index(i,num_new=new)
             for i in range(classifier_cfg.num_steps):
                 build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
-        classifier_cfg.total_options=total_new
+        assert classifier_cfg.total_options==total_new
             
                
           
