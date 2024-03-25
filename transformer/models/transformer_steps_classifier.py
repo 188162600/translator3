@@ -47,13 +47,14 @@ class NextSteps:
         
         self._probability =None
       
-       
+        self.mapped_indices=None
         self._confidence=None
     def get_indices(self):
         if self._indices is None:
             self._indices = torch.argmax(self.tensor,dim=1)
         return self._indices
-   
+    def get_mapped_indices(self):
+        return self.mapped_indices
     def get_softmax(self):
         #print(torch.is_grad_enabled())
         if self._softmax is None:
@@ -157,6 +158,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         self.index_mapping=torch.nn.Parameter( torch.zeros(classifier_cfg.steps_classifier_classes,classifier_cfg.num_steps,dtype=torch.long),requires_grad=False)
         #self.register_buffer("index_mapping", self.index_mapping)
         def build_index(index,num_new,num_shared=0,index_shared=None):
+            nonlocal total_new
             if index_shared is not None:
                 assert 0<=index_shared<index<classifier_cfg.num_steps
             else:
@@ -168,7 +170,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             if num_shared>0:
                 self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
             #self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
-     
+            total_new+=num_new
         def build_random_index(index,num_random,starts_at):
             self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.steps_classifier_classes)[:num_random]    
         
@@ -188,6 +190,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
                 build_index(i,num_new=new)
             for i in range(classifier_cfg.num_steps):
                 build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
+        print(classifier_cfg.total_options,total_new)
         assert classifier_cfg.total_options==total_new
             
                
@@ -367,7 +370,9 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         next_steps=NextSteps(next_steps)
         #print("next_steps",next_steps.get_indices().shape,self.index_mapping.shape)
         if self.index_mapping is not None:
-            next_steps._indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
+            next_steps.mapped_indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
+        else:
+            next_steps.mapped_indices=next_steps.get_indices()
             #next_steps._indices= next_steps.get_indices()[self.index_mapping]
         
         return {

@@ -233,7 +233,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
         #print("transformer_decoder.py:forward",prev_output_tokens.shape,index.shape)
-        index=next_steps.get_indices()
+        index=next_steps.get_mapped_indices()
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
