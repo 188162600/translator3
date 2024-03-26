@@ -271,8 +271,8 @@ class TransformerEncoderBase(FairseqEncoder):
         @torch.enable_grad()
         def backward_steps_classifier(grad):
             confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
-           
-        x.register_hook(backward_steps_classifier)
+        if torch.is_grad_enabled():
+            x.register_hook(backward_steps_classifier)
         src_lengths = (
             src_tokens.ne(self.padding_idx)
             .sum(dim=1, dtype=torch.int32)
