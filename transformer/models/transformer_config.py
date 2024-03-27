@@ -79,6 +79,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     )
     
     
+    
     total_options:int=None
     steps_classifier_shared_classes:int = field(
         default=II("model.encoder.shared_options_each_layer"),
