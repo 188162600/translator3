@@ -79,6 +79,7 @@ class NextSteps:
             self._confidence=torch.sum(self.get_probability(),dim=1)
         #print(self._confidence.grad_fn,"conf")
         return self._confidence
+    
 class TransformerStepsClassifierBase(FairseqEncoder):
     """
     Transformer encoder consisting of *classifier_cfg.layers* layers. Each layer

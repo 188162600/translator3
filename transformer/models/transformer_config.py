@@ -69,7 +69,7 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
-        default="cycle_rev", metadata={"help": "sharing method"}
+        default="none", metadata={"help": "sharing method"}
     )
     options_each_layer:int = field(
         default=4,metadata={"help":"number of options"}
