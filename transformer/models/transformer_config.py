@@ -71,6 +71,9 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
         default="none", metadata={"help": "sharing method"}
     )
+    classifier_learn_epoch:int = field(
+        default=5,metadata={"help":"number of epochs to train the classifier"}
+    )
     options_each_layer:int = field(
         default=4,metadata={"help":"number of options"}
     )

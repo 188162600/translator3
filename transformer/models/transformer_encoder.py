@@ -46,6 +46,15 @@ class TransformerEncoderBase(FairseqEncoder):
         dictionary (~fairseq.data.Dictionary): encoding dictionary
         embed_tokens (torch.nn.Embedding): input embedding
     """
+    def set_last_loss(self, loss):
+        self.next_steps_classifier.set_last_loss(loss)
+    # def set_classifier_requires_grad(self,requires_grad):
+    #     self.next_steps_classifier_requires_grad=requires_grad
+    # def set_epoch(self, epoch):
+    #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
+    #         self.set_requires_grad(True)
+    #     if hasattr(super(),"set_epoch"):
+    #         super().set_epoch(epoch)
 
     def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
         self.cfg = cfg
@@ -107,6 +116,7 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
         else:
             self.layer_norm = None
+        #self.set_classifier_requires_grad(True)
 
     def build_encoder_layer(self, cfg):
         
@@ -268,11 +278,13 @@ class TransformerEncoderBase(FairseqEncoder):
         # `forward` so we use a dictionary instead.
         # TorchScript does not support mixed values so the values are all lists.
         # The empty list is equivalent to None.
-        @torch.enable_grad()
-        def backward_steps_classifier(grad):
-            confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
-        if torch.is_grad_enabled():
-            x.register_hook(backward_steps_classifier)
+        # @torch.enable_grad()
+        # def backward_steps_classifier(grad):
+        #     confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
+        # if torch.is_grad_enabled():
+        #     x.register_hook(backward_steps_classifier)
+            
+       
         src_lengths = (
             src_tokens.ne(self.padding_idx)
             .sum(dim=1, dtype=torch.int32)

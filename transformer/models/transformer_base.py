@@ -45,7 +45,10 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
-
+    def set_last_loss(self, loss):
+        #loss=loss.detach()
+        self.encoder.set_last_loss(loss)
+        self.decoder.set_last_loss(loss)
     @classmethod
     def add_args(cls, parser):
         """Add model-specific arguments to the parser."""

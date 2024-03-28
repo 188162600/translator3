@@ -90,7 +90,14 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         dictionary (~fairseq.data.Dictionary): encoding dictionary
         embed_tokens (torch.nn.Embedding): input embedding
     """
-
+    def set_requires_grad(self,requires_grad):
+        for param in self.parameters():
+            param.requires_grad=requires_grad
+    def set_epoch(self, epoch):
+        if self.classifier_cfg.classifier_learn_epoch>=epoch:
+            self.set_requires_grad(True)
+        if hasattr(super(),"set_epoch"):
+            super().set_epoch(epoch)
     def __init__(self, transformer_cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
         self.transformer_cfg = transformer_cfg
         self.classifier_cfg=classifier_cfg
@@ -151,6 +158,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.layer_norm = None
         self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
         self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
+        self.set_requires_grad(False)
     def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
         
         

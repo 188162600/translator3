@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from ..nn.transformer_layer import TransformerEncoderLayerBase
-
+from ..nn.confidence_loss import confidence_loss
 from fairseq import utils
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoder
@@ -89,7 +89,16 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         dictionary (~fairseq.data.Dictionary): encoding dictionary
         embed_tokens (torch.nn.Embedding): input embedding
     """
-
+    def set_requires_grad(self,requires_grad):
+        self.__requires_grad=requires_grad
+    def set_epoch(self,epoch):
+        if self.classifier_cfg.classifier_learn_epoch>=epoch:
+            self.set_requires_grad(True)
+    def set_last_loss(self,loss):
+        #print("set_last_loss",loss)
+        if self.__requires_grad:
+            confidence_loss(self.last_confidence,loss).mean().backward()
+            self.last_confidence=None
     def __init__(self, transformer_cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
         self.transformer_cfg = transformer_cfg
         self.classifier_cfg=classifier_cfg
@@ -150,6 +159,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.layer_norm = None
         self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
         self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
+        self.set_requires_grad(True)
     def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
         
         
@@ -375,7 +385,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         else:
             next_steps.mapped_indices=next_steps.get_indices()
             #next_steps._indices= next_steps.get_indices()[self.index_mapping]
-        
+        self.last_confidence=next_steps.get_confidence()
         return {
             "next_steps":[next_steps],
             "encoder_out": [x],  # T x B x C

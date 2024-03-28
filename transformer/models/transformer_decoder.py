@@ -55,7 +55,15 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
             (default: False).
     """
-
+    def set_last_loss(self, loss):
+        self.next_steps_classifier.set_last_loss(loss)
+    # def set_classifier_requires_grad(self,requires_grad):
+    #     self.next_steps_classifier_requires_grad=requires_grad
+    # def set_epoch(self, epoch):
+    #     if self.cfg.decoder.classifier_learn_epoch>=epoch:
+    #         self.set_requires_grad(True)
+    #     if hasattr(super(),"set_epoch"):
+    #         super().set_epoch(epoch)
     def __init__(
         self,
         cfg,
@@ -146,7 +154,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         self.output_projection = output_projection
         if self.output_projection is None:
             self.build_output_projection(cfg, dictionary, embed_tokens)
-
+        # self.set_classifier_requires_grad(True)
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -246,12 +254,14 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         #print("forward index",index.shape)
         if not features_only:
             x = self.output_layer(x,index)
-        @torch.enable_grad()
-        def backward_steps_classifier(grad):
-            confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
-            #((grad.detach().sum())*next_steps.get_confidence().mean()).backward()
-        if torch.is_grad_enabled():
-            x.register_hook(backward_steps_classifier)
+        # if self.next_steps_classifier_requires_grad:
+        #     @torch.enable_grad()
+        #     def backward_steps_classifier(grad):
+        #         print("grad",grad.detach().sum(),"confidence",next_steps.get_confidence().mean(),"decoder")
+        #         confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
+        #         #((grad.detach().sum())*next_steps.get_confidence().mean()).backward()
+        #     if torch.is_grad_enabled():
+        #         x.register_hook(backward_steps_classifier)
         return x, extra
 
     def extract_features(
