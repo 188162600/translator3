@@ -96,7 +96,8 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.set_requires_grad(True)
     def set_last_loss(self,loss):
         #print("set_last_loss",loss)
-        if self.__requires_grad:
+        if self.__requires_grad and torch.enable_grad():
+            
             confidence_loss(self.last_confidence,loss).mean().backward()
             self.last_confidence=None
     def __init__(self, transformer_cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
@@ -159,7 +160,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             self.layer_norm = None
         self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
         self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
-        self.set_requires_grad(True)
+        self.set_requires_grad(False)
     def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
         
         
