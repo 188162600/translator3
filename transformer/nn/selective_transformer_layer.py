@@ -233,6 +233,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         # Note that we cannot use -inf here, because at some edge cases,
         # the attention weight (before softmax) for some padded element in query
         # will become -inf, which results in NaN in model parameters
+        #print(index)
         if attn_mask is not None:
             attn_mask = attn_mask.masked_fill(
                 attn_mask.to(torch.bool), -1e8 if x.dtype == torch.float32 else -1e4
@@ -696,6 +697,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         Returns:
             encoded output of shape `(seq_len, batch, embed_dim)`
         """
+        #print(index)
         if need_head_weights:
             need_attn = True
 

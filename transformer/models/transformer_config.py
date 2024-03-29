@@ -21,6 +21,7 @@ DEFAULT_MIN_PARAMS_TO_WRAP = int(1e8)
 
 _NAME_PARSER = r"(decoder|encoder|quant_noise)_(.*)"
 def _get_total_options(sharing_method:str,num_total,num_shared,num_non_shared,num_steps)->int:
+    print("sharing method",sharing_method)
     if sharing_method=="none":
         return int(num_steps*num_total)
     elif sharing_method=="random":
@@ -69,7 +70,7 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
-        default="none", metadata={"help": "sharing method"}
+        default="cycle_rev", metadata={"help": "sharing method"}
     )
     classifier_learn_epoch:int = field(
         default=5,metadata={"help":"number of epochs to train the classifier"}
@@ -111,9 +112,9 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
         if self.steps_classifier_non_shared_classes == II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"):
             self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
         #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        if self.total_options is None:
-            self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-            print(self.total_options,"total options")
+        #if self.total_options is None:
+        self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
+        print(self.total_options,"total options")
     
     # num_encoder_layers:int = field(
     #     default=1,metadata={"help":"number of encoder layers"}

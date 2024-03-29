@@ -26,7 +26,8 @@ from fairseq.modules import (
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-
+import logging
+logger = logging.getLogger(__name__)
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -183,7 +184,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             #self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
             total_new+=num_new
         def build_random_index(index,num_random,starts_at):
-            self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.steps_classifier_classes)[:num_random]    
+            self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.total_options)[:num_random]    
         
            
         if classifier_cfg.sharing_method=="none":
@@ -202,7 +203,11 @@ class TransformerStepsClassifierBase(FairseqEncoder):
                 build_index(i,num_new=new)
             for i in range(classifier_cfg.num_steps):
                 build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
-        print(classifier_cfg.total_options,total_new)
+        #print(classifier_cfg.total_options,total_new)
+        logger.info(f"Total options: {classifier_cfg.total_options}, Total new: {total_new}")
+        logger.info(f"Index mapping: {self.index_mapping}")
+        logger.info(f"total_new: {total_new}")
+        print("sharing method",classifier_cfg.sharing_method)
         assert classifier_cfg.total_options==total_new
             
                
@@ -380,6 +385,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         )
         next_steps=self.output_layer(x)
         next_steps=NextSteps(next_steps)
+        #print("next_steps",next_steps.get_indices())
         #print("next_steps",next_steps.get_indices().shape,self.index_mapping.shape)
         if self.index_mapping is not None:
             next_steps.mapped_indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
@@ -387,6 +393,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             next_steps.mapped_indices=next_steps.get_indices()
             #next_steps._indices= next_steps.get_indices()[self.index_mapping]
         self.last_confidence=next_steps.get_confidence()
+        #print("mapped index",next_steps.mapped_indices)
         return {
             "next_steps":[next_steps],
             "encoder_out": [x],  # T x B x C
