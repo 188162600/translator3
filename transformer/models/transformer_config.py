@@ -70,7 +70,7 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
-        default="cycle_rev", metadata={"help": "sharing method"}
+        default="none", metadata={"help": "sharing method"}
     )
     classifier_learn_epoch:int = field(
         default=5,metadata={"help":"number of epochs to train the classifier"}
