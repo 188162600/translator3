@@ -56,14 +56,14 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.normalize_before = cfg.encoder.normalize_before
         #self.num_options = cfg.encoder.num_options
         self.fc1 = self.build_fc1(
-            cfg.encoder.total_options,
+            cfg.encoder.options_each_layer,
             self.embed_dim,
             cfg.encoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.encoder.total_options,
+            cfg.encoder.options_each_layer,
             cfg.encoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,
@@ -134,8 +134,8 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         new_fc1_bias.requires_grad = True
 
         self.fc1=self.build_fc1(
-           self.fc1.num_options- len(remove_index),
-            self.fc1.in_features,
+           self.fc1.num_options,
+            self.fc1.in_features-len(remove_index),
             self.fc1.out_features,
             self.quant_noise,
             self.quant_noise_block_size)
@@ -583,14 +583,14 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         )
 
         self.fc1 = self.build_fc1(
-            cfg.decoder.total_options,
+            cfg.decoder.options_each_layer,
             self.embed_dim,
             cfg.decoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.decoder.total_options,
+            cfg.decoder.options_each_layer,
             cfg.decoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,

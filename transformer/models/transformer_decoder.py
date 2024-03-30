@@ -130,10 +130,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layers = LayerDropModuleList(p=self.decoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        shared_layer=self.build_decoder_layer(cfg, no_encoder_attn)
+        #shared_layer=self.build_decoder_layer(cfg, no_encoder_attn)
         self.layers.extend(
             [
-                shared_layer
+                self.build_decoder_layer(cfg, no_encoder_attn)
                 for _ in range(cfg.decoder.layers)
             ]
         )

@@ -103,12 +103,14 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        shared_layer=self.build_encoder_layer(cfg)
+        # shared_layer=self.build_encoder_layer(cfg)
+        # self.layers.extend(
+        #     [
+        #         shared_layer
+        #         for i in range(cfg.encoder.layers)
+        #     ]
         self.layers.extend(
-            [
-                shared_layer
-                for i in range(cfg.encoder.layers)
-            ]
+            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)]
         )
         self.num_layers = len(self.layers)
 

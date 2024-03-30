@@ -84,7 +84,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     
     
     
-    total_options:int=None
+    # total_options:int=None
     steps_classifier_shared_classes:int = field(
         default=II("model.encoder.shared_options_each_layer"),
     )
@@ -113,8 +113,8 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
             self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
         #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
         #if self.total_options is None:
-        self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        print(self.total_options,"total options")
+        # self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
+        # print(self.total_options,"total options")
     
     # num_encoder_layers:int = field(
     #     default=1,metadata={"help":"number of encoder layers"}

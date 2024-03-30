@@ -160,55 +160,55 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         else:
             self.layer_norm = None
         self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
-        self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
+        # self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
         self.set_requires_grad(False)
-    def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
+    # def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
         
         
-        total_new=0
+    #     total_new=0
        
-        self.index_mapping=torch.nn.Parameter( torch.zeros(classifier_cfg.steps_classifier_classes,classifier_cfg.num_steps,dtype=torch.long),requires_grad=False)
-        #self.register_buffer("index_mapping", self.index_mapping)
-        def build_index(index,num_new,num_shared=0,index_shared=None):
-            nonlocal total_new
-            if index_shared is not None:
-                assert 0<=index_shared<index<classifier_cfg.num_steps
-            else:
-                assert 0<=index<classifier_cfg.num_steps
-            #assert num_new+num_shared==classifier_cfg.steps_classifier_classes
+    #     self.index_mapping=torch.nn.Parameter( torch.zeros(classifier_cfg.steps_classifier_classes,classifier_cfg.num_steps,dtype=torch.long),requires_grad=False)
+    #     #self.register_buffer("index_mapping", self.index_mapping)
+    #     def build_index(index,num_new,num_shared=0,index_shared=None):
+    #         nonlocal total_new
+    #         if index_shared is not None:
+    #             assert 0<=index_shared<index<classifier_cfg.num_steps
+    #         else:
+    #             assert 0<=index<classifier_cfg.num_steps
+    #         #assert num_new+num_shared==classifier_cfg.steps_classifier_classes
             
                 
-            self. index_mapping[0:num_new,index]= torch.arange(total_new,total_new+num_new)
-            if num_shared>0:
-                self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
-            #self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
-            total_new+=num_new
-        def build_random_index(index,num_random,starts_at):
-            self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.total_options)[:num_random]    
+    #         self. index_mapping[0:num_new,index]= torch.arange(total_new,total_new+num_new)
+    #         if num_shared>0:
+    #             self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
+    #         #self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
+    #         total_new+=num_new
+    #     def build_random_index(index,num_random,starts_at):
+    #         self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.total_options)[:num_random]    
         
            
-        if classifier_cfg.sharing_method=="none":
-            for i in range(classifier_cfg.num_steps):
-                build_index(i,num_new=classifier_cfg.steps_classifier_classes)
-        if classifier_cfg.sharing_method=="cycle_rev":
-            assert classifier_cfg.num_steps%2==0
-            for i in range( classifier_cfg.num_steps//2):
-                build_index(i,num_new=classifier_cfg.steps_classifier_classes)
-            new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
-            for i in range(classifier_cfg.num_steps//2,classifier_cfg.num_steps):
-                build_index(i,num_new=new,num_shared=classifier_cfg.steps_classifier_shared_classes,index_shared=classifier_cfg.num_steps-i-1)
-        if classifier_cfg.sharing_method=="random":
-            new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
-            for i in range(classifier_cfg.num_steps):
-                build_index(i,num_new=new)
-            for i in range(classifier_cfg.num_steps):
-                build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
-        #print(classifier_cfg.total_options,total_new)
-        logger.info(f"Total options: {classifier_cfg.total_options}, Total new: {total_new}")
-        logger.info(f"Index mapping: {self.index_mapping}")
-        logger.info(f"total_new: {total_new}")
-        print("sharing method",classifier_cfg.sharing_method)
-        assert classifier_cfg.total_options==total_new
+    #     if classifier_cfg.sharing_method=="none":
+    #         for i in range(classifier_cfg.num_steps):
+    #             build_index(i,num_new=classifier_cfg.steps_classifier_classes)
+    #     if classifier_cfg.sharing_method=="cycle_rev":
+    #         assert classifier_cfg.num_steps%2==0
+    #         for i in range( classifier_cfg.num_steps//2):
+    #             build_index(i,num_new=classifier_cfg.steps_classifier_classes)
+    #         new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
+    #         for i in range(classifier_cfg.num_steps//2,classifier_cfg.num_steps):
+    #             build_index(i,num_new=new,num_shared=classifier_cfg.steps_classifier_shared_classes,index_shared=classifier_cfg.num_steps-i-1)
+    #     if classifier_cfg.sharing_method=="random":
+    #         new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
+    #         for i in range(classifier_cfg.num_steps):
+    #             build_index(i,num_new=new)
+    #         for i in range(classifier_cfg.num_steps):
+    #             build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
+    #     #print(classifier_cfg.total_options,total_new)
+    #     logger.info(f"Total options: {classifier_cfg.total_options}, Total new: {total_new}")
+    #     logger.info(f"Index mapping: {self.index_mapping}")
+    #     logger.info(f"total_new: {total_new}")
+    #     print("sharing method",classifier_cfg.sharing_method)
+    #     assert classifier_cfg.total_options==total_new
             
                
           
@@ -387,10 +387,10 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         next_steps=NextSteps(next_steps)
         #print("next_steps",next_steps.get_indices())
         #print("next_steps",next_steps.get_indices().shape,self.index_mapping.shape)
-        if self.index_mapping is not None:
-            next_steps.mapped_indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
-        else:
-            next_steps.mapped_indices=next_steps.get_indices()
+        # if self.index_mapping is not None:
+        #     next_steps.mapped_indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
+        # else:
+        next_steps.mapped_indices=next_steps.get_indices()
             #next_steps._indices= next_steps.get_indices()[self.index_mapping]
         self.last_confidence=next_steps.get_confidence()
         #print("mapped index",next_steps.mapped_indices)
