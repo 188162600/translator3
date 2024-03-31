@@ -91,7 +91,9 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     steps_classifier_non_shared_classes:int = field(
         default=II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"),
     )
-    
+    classifier_layers:int = field(
+        default=4,metadata={"help":"number of classifier layers"}
+    )
     steps_classifier_classes:int = field(
         default=II("model.encoder.options_each_layer"),
         metadata={"help":"number of classes in the classifier"}
@@ -147,6 +149,9 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     
 @dataclass
 class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
+    classifier_layers:int = field(
+        default=2,metadata={"help":"number of classifier layers"}
+    )
     num_decoder_layers:int = field(
         default=4,metadata={"help":"number of decoder layers"}
     )

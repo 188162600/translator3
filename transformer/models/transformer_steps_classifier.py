@@ -151,7 +151,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         else:
             self.layers = nn.ModuleList([])
         self.layers.extend(
-            [self.build_encoder_layer(transformer_cfg) for i in range(classifier_cfg.layers)]
+            [self.build_encoder_layer(transformer_cfg) for i in range(classifier_cfg.classifier_layers)]
         )
         self.num_layers = len(self.layers)
 

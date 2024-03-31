@@ -527,7 +527,7 @@ class TransformerDecoder(TransformerDecoderBase):
     ):
         # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
         
-        next_steps=self.next_steps_classifier.forward(src_tokens=prev_output_tokens,src_lengths=src_lengths)["next_steps"][0]
+        next_steps=self.next_steps_classifier.forward(src_tokens=prev_output_tokens.detach(),src_lengths=src_lengths)["next_steps"][0]
         #next_steps=NextSteps(next_steps)
         # print(prev_output_tokens.shape)
         # print("input",prev_output_tokens.shape)
