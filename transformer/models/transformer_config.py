@@ -77,7 +77,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     )
     
     options_each_layer:int = field(
-        default=12,metadata={"help":"number of options"}
+        default=6,metadata={"help":"number of options"}
     )
  
     

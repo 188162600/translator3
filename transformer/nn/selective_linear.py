@@ -30,6 +30,7 @@ class SelectiveLinear(Module):
             self.register_parameter('bias', None)
         self.reset_parameters()
         self.batch_index=batch_index
+        self.activation=torch.nn.Tanh()
         
     
     def reset_parameters(self) -> None:
@@ -44,22 +45,20 @@ class SelectiveLinear(Module):
         
         if self.batch_index!=0:
             x=x.transpose(0,self.batch_index)
-        # print("x.shape",x.shape,selection_logits.shape,self.num_options)
-        # print("weights.shape",self.weights.shape)
-        # Compute selection probabilities from logits using softmax
+        
+        
         selection_probs = F.softmax(selection_logits / temperature, dim=-1)
-        # print("Selection probs shape:", selection_probs.shape)
+    
 
-        transformed = torch.einsum('nij,baj->bani', self.weights, x)
+        weighted_weight = torch.einsum('nij,baj->bani', self.weights, x)
 
-        # Compute selection probabilities from logits using softmax
-        selection_probs = F.softmax(selection_logits / temperature, dim=-1)
-
-        # Compute the weighted sum of biases using the selection probabilities
+        weighted_weight=self.activation(weighted_weight)
+        # Sum the outputs using the selection probabilities to get the final output
+        final_output = torch.einsum('bani,bn->bai', weighted_weight, selection_probs)
+        
+          # Compute the weighted sum of biases using the selection probabilities
         weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
 
-        # Sum the outputs using the selection probabilities to get the final output
-        final_output = torch.einsum('bani,bn->bai', transformed, selection_probs)
 
         # Add the weighted biases to the final output
         final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
