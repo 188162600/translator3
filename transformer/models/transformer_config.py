@@ -70,27 +70,25 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
-        default="none", metadata={"help": "sharing method"}
+        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
     )
     classifier_learn_epoch:int = field(
         default=5,metadata={"help":"number of epochs to train the classifier"}
     )
+    
     options_each_layer:int = field(
-        default=4,metadata={"help":"number of options"}
+        default=6,metadata={"help":"number of options"}
     )
-    shared_options_each_layer:int = field(
-        default=2,metadata={"help":"number of shared options in each layer"}
-    )
+ 
     
     
-    
-    # total_options:int=None
-    steps_classifier_shared_classes:int = field(
-        default=II("model.encoder.shared_options_each_layer"),
-    )
-    steps_classifier_non_shared_classes:int = field(
-        default=II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"),
-    )
+    # # total_options:int=None
+    # steps_classifier_shared_classes:int = field(
+    #     default=II("model.encoder.shared_options_each_layer"),
+    # )
+    # steps_classifier_non_shared_classes:int = field(
+    #     default=II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"),
+    # )
     classifier_layers:int = field(
         default=4,metadata={"help":"number of classifier layers"}
     )
@@ -109,10 +107,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
             self.num_steps = self.layers
         if self.steps_classifier_classes == II("model.encoder.options_each_layer"):
             self.steps_classifier_classes = self.options_each_layer
-        if self.steps_classifier_shared_classes == II("model.encoder.shared_options_each_layer"):
-            self.steps_classifier_shared_classes = self.shared_options_each_layer
-        if self.steps_classifier_non_shared_classes == II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"):
-            self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
+       
         #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
         #if self.total_options is None:
         # self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
@@ -163,17 +158,8 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
         },
     )
    
-    num_steps:int = field(
-        default=II("model.decoder.layers+2"),
-        metadata={"help":"layers+embedding and output layers"}
-    )
     total_options:int=None
-    steps_classifier_shared_classes:int = field(
-        default=II("model.decoder.shared_options_each_layer"),
-    )
-    steps_classifier_non_shared_classes:int = field(
-        default=II("model.decoder.options_each_layer-model.decoder.shared_options_each_layer"),
-    )
+    
     
     steps_classifier_classes:int = field(
         default=II("model.decoder.options_each_layer"),
@@ -188,16 +174,13 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
             self.input_dim = self.embed_dim
         if self.output_dim == II("model.decoder.embed_dim"):
             self.output_dim = self.embed_dim
-        if self.num_steps == II("model.decoder.layers+2"):
-            self.num_steps = self.layers+2
+        # if self.num_steps == II("model.decoder.layers+2"):
+        #     self.num_steps = self.layers+2
             
 
         if self.steps_classifier_classes == II("model.decoder.options_each_layer"):
             self.steps_classifier_classes = self.options_each_layer
-        if self.steps_classifier_shared_classes == II("model.decoder.shared_options_each_layer"):
-            self.steps_classifier_shared_classes = self.shared_options_each_layer
-        if self.steps_classifier_non_shared_classes == II("model.decoder.options_each_layer-model.decoder.shared_options_each_layer"):
-            self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
+    
         super().__post_init__()
         # if self.total_options is None:
         #     self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)

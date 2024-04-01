@@ -27,7 +27,7 @@ from fairseq.modules import (
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-from ..models.transformer_steps_classifier import TransformerEncoderStepsClassifier,NextSteps
+from ..models.transformer_steps_classifier import TransformerEncoderStepsClassifier
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -118,6 +118,7 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
         else:
             self.layer_norm = None
+        self.build_sharing(cfg.encoder.sharing_method)
         #self.set_classifier_requires_grad(True)
 
     def build_encoder_layer(self, cfg):
@@ -135,6 +136,17 @@ class TransformerEncoderBase(FairseqEncoder):
         min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
+    def build_sharing(self,method):
+        print("sharing method",method)
+        if method=="all":
+            base_layer=self.layers[0]
+            for i in range(1,self.num_layers):
+                self.layers[i].fc1=base_layer.fc1
+                self.layers[i].fc2=base_layer.fc2
+        if method=="cycle_rev":
+            for i in range(1,self.num_layers//2):
+                self.layers[i].fc1=self.layers[self.num_layers-i].fc1
+                self.layers[i].fc2=self.layers[self.num_layers-i].fc2
 
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
@@ -225,8 +237,8 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
-        index=next_steps.get_mapped_indices()
-        assert index is not None
+        # # index=next_steps.get_mapped_indices()
+        # assert index is not None
         
         # compute padding mask
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
@@ -259,7 +271,7 @@ class TransformerEncoderBase(FairseqEncoder):
         for idx, layer in enumerate( self.layers):
             
             lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=index[:,idx]
+                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps[:,:,idx]
             )
 
             if isinstance(lr, tuple) and len(lr) == 2:

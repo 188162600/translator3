@@ -17,7 +17,7 @@ from fairseq.models import FairseqIncrementalDecoder
 from ..nn.selective_linear import SelectiveLinear
 from ..nn import selective_transformer_layer
 from ..nn.confidence_loss import confidence_loss
-from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier,NextSteps
+from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier
 from ..models.transformer_config import TransformerConfig
 
 # from fairseq.models.transformer import TransformerConfig
@@ -97,7 +97,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         if not cfg.adaptive_input and cfg.quant_noise.pq > 0:
             self.quant_noise = apply_quant_noise_(
-                 SelectiveLinear(cfg.num_options,embed_dim, embed_dim, bias=False),
+                 torch.nn. Linear(embed_dim, embed_dim, bias=False),
                 cfg.quant_noise.pq,
                 cfg.quant_noise.pq_block_size,
             )
@@ -105,7 +105,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.quant_noise = None
 
         self.project_in_dim = (
-            SelectiveLinear(cfg.num_options,input_embed_dim, embed_dim, bias=False)
+            torch.nn.Linear(input_embed_dim, embed_dim, bias=False)
             if embed_dim != input_embed_dim
             else None
         )
@@ -145,7 +145,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layer_norm = None
 
         self.project_out_dim = (
-            SelectiveLinear(cfg.num_options,embed_dim, self.output_embed_dim, bias=False)
+            torch.nn.Linear(embed_dim, self.output_embed_dim, bias=False)
             if embed_dim != self.output_embed_dim and not cfg.tie_adaptive_weights
             else None
         )
@@ -155,6 +155,8 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         if self.output_projection is None:
             self.build_output_projection(cfg, dictionary, embed_tokens)
         # self.set_classifier_requires_grad(True)
+        self.build_sharing(cfg.decoder.sharing_method)
+
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -167,10 +169,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 tie_proj=cfg.tie_adaptive_proj,
             )
         elif self.share_input_output_embed:
-            # print(self.cfg.decoder.num_options,
-            #     self.embed_tokens.weight.shape[1],
-            #     self.embed_tokens.weight.shape[0],
-            #     batch_index=0,)
+           
             self.output_projection = torch.nn.Linear(
                 #self.cfg.decoder.num_options,
                 self.embed_tokens.weight.shape[1],
@@ -179,8 +178,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             )
             self.output_projection.weight = self.embed_tokens.weight
         else:
-            self.output_projection = SelectiveLinear(
-                self.cfg.decoder.num_options,
+            self.output_projection = torch.nn.Linear(
                  self.embed_tokens.weight.shape[1],
                 self.embed_tokens.weight.shape[0],
                 batch_index=0,
@@ -207,7 +205,19 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
-
+    def build_sharing(self,method):
+        print("sharing method",method)
+        if method=="all":
+            base_layer=self.layers[0]
+            for i in range(1,self.num_layers):
+                self.layers[i].fc1=base_layer.fc1
+                self.layers[i].fc2=base_layer.fc2
+        if method=="cycle_rev":
+            for i in range(1,self.num_layers//2):
+                self.layers[i].fc1=self.layers[self.num_layers-i].fc1
+                self.layers[i].fc2=self.layers[self.num_layers-i].fc2
+    
+            
     def forward(
         self,
         prev_output_tokens,
@@ -241,7 +251,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
         #print("transformer_decoder.py:forward",prev_output_tokens.shape,index.shape)
-        index=next_steps.get_mapped_indices()
+        
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -249,11 +259,11 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment=full_context_alignment,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
-            index=index
+            index=next_steps
         )
         #print("forward index",index.shape)
         if not features_only:
-            x = self.output_layer(x,index)
+            x = self.output_layer(x,next_steps)
         # if self.next_steps_classifier_requires_grad:
         #     @torch.enable_grad()
         #     def backward_steps_classifier(grad):
@@ -350,7 +360,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
         if self.quant_noise is not None:
-            x = self.quant_noise(x,index[:,0])
+            x = self.quant_noise(x,index[:,:,0])
 
         if self.project_in_dim is not None:
             x = self.project_in_dim(x)
@@ -388,7 +398,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,idx+1]
+                index=index[:,:,idx]
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
@@ -421,7 +431,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             if self.share_input_output_embed:
                 return self.output_projection(features)
             else:
-                return self.output_projection(features,index[:,-1])
+                return self.output_projection(features,index[:,:,-1])
         else:
             return features
 
