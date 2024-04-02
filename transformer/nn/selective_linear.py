@@ -14,11 +14,9 @@ import math
 from typing import Any, Tuple
 
 
-
 class SelectiveLinear(Module):
-    def __init__(self,num_options:int, in_features: int, out_features: int, bias: bool = True,batch_index:int=0, device=None,
-                 dtype=None):
-        super().__init__()
+    def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True, batch_index: int = 0, device=None, dtype=None):
+        super(SelectiveLinear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.num_options = num_options
@@ -29,72 +27,56 @@ class SelectiveLinear(Module):
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
-        self.batch_index=batch_index
-        self.activation=torch.nn.Tanh()
-        
-    
+        self.batch_index = batch_index
+        self.activation = torch.nn.Tanh()
+
     def reset_parameters(self) -> None:
         init.kaiming_uniform_(self.weights, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weights)
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
-            
 
     def forward(self, x, selection_logits, temperature=1.0):
-        
-        if self.batch_index!=0:
-            x=x.transpose(0,self.batch_index)
-        
+        if self.batch_index != 0:
+            x = x.transpose(0, self.batch_index)
         
         selection_probs = F.softmax(selection_logits / temperature, dim=-1)
-    
-
-        weighted_weight = torch.einsum('nij,baj->bani', self.weights, x)
-
-        weighted_weight=self.activation(weighted_weight)
-        # Sum the outputs using the selection probabilities to get the final output
-        final_output = torch.einsum('bani,bn->bai', weighted_weight, selection_probs)
+        weighted_weights = torch.einsum('nij,baj->bani', self.weights, x)
+        weighted_weights = self.activation(weighted_weights)
         
-          # Compute the weighted sum of biases using the selection probabilities
-        weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+        final_output = torch.einsum('bani,bn->bai', weighted_weights, selection_probs)
 
+        if self.bias is not None:
+            weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+            final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
 
-        # Add the weighted biases to the final output
-        final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
-
-        if self.batch_index!=0:
-            final_output=final_output.transpose(0,self.batch_index)
-       
-            
-            
+        if self.batch_index != 0:
+            final_output = final_output.transpose(0, self.batch_index)
+        
         return final_output
 
     def extra_repr(self) -> str:
         return f'num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-        weight_key = prefix + 'weight'
-        bias_key = prefix + 'bias'
-        if weight_key  in state_dict:
-            
-            weight=state_dict[weight_key] 
-            #print("weight.shape",weight.shape)
-            if weight.dim()==2:
-                weight=weight.unsqueeze(0).expand(self.num_options,-1,-1)
-               
-                state_dict[weight_key]=weight
-                
-        if bias_key  in state_dict:
-            bias=state_dict[bias_key]
-            #print("bias.shape",bias.shape)
-            if bias.dim()==1:
-                bias=bias.unsqueeze(0).expand(self.num_options,-1)
-                
-                state_dict[bias_key]=bias
-        return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
-
+        weight_key = prefix + 'weights'
+        bias_key = prefix + 'bias'
+        if weight_key in state_dict:
+            weight = state_dict[weight_key]
+            if weight.dim() == 2:
+                weight = weight.unsqueeze(0).expand(self.num_options, -1, -1)
+                state_dict[weight_key] = weight
+                
+        if bias_key in state_dict:
+            bias = state_dict[bias_key]
+            if bias.dim() == 1:
+                bias = bias.unsqueeze(0).expand(self.num_options, -1)
+                state_dict[bias_key] = bias
+                
+                
 # class SelectiveLinear(Module):
 #     def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True,batch_index:int=0, device=None,
 #                  dtype=None) -> None:
