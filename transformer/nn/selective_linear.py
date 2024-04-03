@@ -49,6 +49,7 @@ class SelectiveLinear(Module):
 
         if self.bias is not None:
             weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+            weighted_biases=self.activation(weighted_biases)
             final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
 
         if self.batch_index != 0:
