@@ -170,8 +170,6 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        *,
-        next_steps
     ):
         """
         Args:
@@ -198,7 +196,7 @@ class TransformerEncoderBase(FairseqEncoder):
         """
         #print("encoder input",src_tokens.shape)
         return self.forward_scriptable(
-            src_tokens, src_lengths, return_all_hiddens, token_embeddings,next_steps=next_steps
+            src_tokens, src_lengths, return_all_hiddens, token_embeddings
         )
 
     # TorchScript doesn't support super() method so that the scriptable Subclass
@@ -211,7 +209,6 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        next_steps=None
     ):
         
         """
@@ -271,7 +268,7 @@ class TransformerEncoderBase(FairseqEncoder):
         for idx, layer in enumerate( self.layers):
             
             lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps[:,:,idx]
+                x, encoder_padding_mask=encoder_padding_mask if has_pads else None
             )
 
             if isinstance(lr, tuple) and len(lr) == 2:
@@ -406,7 +403,7 @@ class TransformerEncoder(TransformerEncoderBase):
             embed_tokens,
             return_fc=return_fc,
         )
-        self.next_steps_classifier = TransformerEncoderStepsClassifier(cfg, dictionary,embed_tokens)
+        # self.next_steps_classifier = TransformerEncoderStepsClassifier(cfg, dictionary,embed_tokens)
 
         
 
@@ -417,7 +414,7 @@ class TransformerEncoder(TransformerEncoderBase):
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
     ):
-        next_steps=self.next_steps_classifier(src_tokens.detach(),src_lengths)["next_steps"][0]
+        # next_steps=self.next_steps_classifier(src_tokens.detach(),src_lengths)["next_steps"][0]
         #next_steps=NextSteps(next_steps)
         # print("en input",src_tokens.shape)
         # print("en next_steps",next_steps.get_indices().shape)
@@ -426,7 +423,7 @@ class TransformerEncoder(TransformerEncoderBase):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
             token_embeddings=token_embeddings,
-            next_steps=next_steps
+            # next_steps=next_steps
         )
         
 # class TransformerEncoderSection(nn.Module):

@@ -42,6 +42,9 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.quant_noise_block_size = cfg.quant_noise.pq_block_size
         self.self_attn = self.build_self_attention(self.embed_dim, cfg)
         self.self_attn_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
+        self.layer_attn = self.build_self_attention(self.embed_dim, cfg)
+        self.layer_attn_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
+        self.layer_attn_output=torch.nn.Linear(self.embed_dim,cfg.encoder.options_each_layer)
         self.dropout_module = FairseqDropout(
             cfg.dropout, module_name=self.__class__.__name__
         )
@@ -210,8 +213,6 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         x,
         encoder_padding_mask: Optional[Tensor],
         attn_mask: Optional[Tensor] = None,
-        *,
-        index
     ):
         """
         Args:
@@ -250,6 +251,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             need_weights=False,
             attn_mask=attn_mask,
         )
+      
         x = self.dropout_module(x)
         x = self.residual_connection(x, residual)
         if not self.normalize_before:
@@ -259,6 +261,19 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         if self.normalize_before:
             x = self.final_layer_norm(x)
         #print("x",x.shape,"index",index.shape)
+        x_detach=x.detach()
+        index,_=self.layer_attn(
+            query=x_detach,
+            key=x_detach,
+            value=x_detach,
+            key_padding_mask=encoder_padding_mask.detach() if encoder_padding_mask is not None else None,
+            need_weights=False,
+            attn_mask=attn_mask.detach() if attn_mask is not None else None,
+            
+        )
+        print(index.shape,"index")
+        index=self.layer_attn_output(index[0])
+        print(index.shape,"index")
         x = self.activation_fn(self.fc1(x,index))
         x = self.activation_dropout_module(x)
         x = self.fc2(x,index)
@@ -533,11 +548,13 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             add_bias_kv=add_bias_kv,
             add_zero_attn=add_zero_attn,
         )
+      
         self.attn_ln = (
             LayerNorm(self.embed_dim)
             if utils.safe_getattr(cfg, "scale_attn", False)
             else None
         )
+        
         self.nh = self.self_attn.num_heads
         self.head_dim = self.self_attn.head_dim
         scale_heads = utils.safe_getattr(cfg, "scale_heads", False)
@@ -565,7 +582,8 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         else:
             self.encoder_attn = self.build_encoder_attention(self.embed_dim, cfg)
             self.encoder_attn_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
-
+        self.layer_attn = self.build_encoder_attention(self.embed_dim, cfg)
+        self.layer_attn_output=torch.nn.Linear(self.embed_dim,cfg.decoder.options_each_layer)
         self.ffn_layernorm = (
             LayerNorm(cfg.decoder.ffn_embed_dim)
             if utils.safe_getattr(cfg, "scale_fc", False)
@@ -681,8 +699,6 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         self_attn_padding_mask: Optional[torch.Tensor] = None,
         need_attn: bool = False,
         need_head_weights: bool = False,
-        *,
-        index:torch.Tensor
     ):
         """
         Args:
@@ -698,6 +714,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             encoded output of shape `(seq_len, batch, embed_dim)`
         """
         #print(index)
+        
         if need_head_weights:
             need_attn = True
 
@@ -748,6 +765,8 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             need_weights=False,
             attn_mask=self_attn_mask,
         )
+        # print(x.shape,"encoder")
+        
         if self.c_attn is not None:
             tgt_len, bsz = x.size(0), x.size(1)
             x = x.view(tgt_len, bsz, self.nh, self.head_dim)
@@ -774,7 +793,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
                     saved_state["prev_key_padding_mask"] = prev_attn_state[2]
                 assert incremental_state is not None
                 self.encoder_attn._set_input_buffer(incremental_state, saved_state)
-
+            # print(x.shape,"old",encoder_out.shape)
             x, attn = self.encoder_attn(
                 query=x,
                 key=encoder_out,
@@ -793,6 +812,22 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         residual = x
         if self.normalize_before:
             x = self.final_layer_norm(x)
+        
+        # print(x.shape,"new",encoder_out.shape)
+        index,_=self.layer_attn(
+            query=x.detach(),
+            key=encoder_out.detach(),
+            value=encoder_out.detach(),
+            key_padding_mask=encoder_padding_mask.detach(),
+            static_kv=True,
+            incremental_state=incremental_state,
+            need_weights=need_attn or (not self.training and self.need_attn),
+            need_head_weights=need_head_weights,
+            
+        )
+        index=self.layer_attn_output(index[0])
+        # print(index.shape,"index decoder")
+        
 
         x = self.activation_fn(self.fc1(x,index))
         x = self.activation_dropout_module(x)

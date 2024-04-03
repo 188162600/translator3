@@ -202,6 +202,7 @@ class TransformerEncoderLayerBase(nn.Module):
             need_weights=False,
             attn_mask=attn_mask,
         )
+     
         x = self.dropout_module(x)
         x = self.residual_connection(x, residual)
         if not self.normalize_before:

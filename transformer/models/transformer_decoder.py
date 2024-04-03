@@ -229,8 +229,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
-        *,
-        next_steps
     ):
         """
         Args:
@@ -259,11 +257,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment=full_context_alignment,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
-            index=next_steps
         )
         #print("forward index",index.shape)
         if not features_only:
-            x = self.output_layer(x,next_steps)
+            x = self.output_layer(x)
         # if self.next_steps_classifier_requires_grad:
         #     @torch.enable_grad()
         #     def backward_steps_classifier(grad):
@@ -282,7 +279,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-        index=...  
     ):
         return self.extract_features_scriptable(
             prev_output_tokens,
@@ -291,7 +287,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment,
             alignment_layer,
             alignment_heads,
-            index=index
         )
 
     """
@@ -308,8 +303,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-    
-        index=...
     ):
         """
         Similar to *forward* but only return features.
@@ -330,7 +323,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        assert index is not ...
+    
         bs, slen = prev_output_tokens.size()
         if alignment_layer is None:
             alignment_layer = self.num_layers - 1
@@ -360,7 +353,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
         if self.quant_noise is not None:
-            x = self.quant_noise(x,index[:,:,0])
+            x = self.quant_noise(x)
 
         if self.project_in_dim is not None:
             x = self.project_in_dim(x)
@@ -397,8 +390,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_mask=self_attn_mask,
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
-                need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,:,idx]
+                need_head_weights=bool((idx == alignment_layer))
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
@@ -422,7 +414,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         return x, {"attn": [attn], "inner_states": inner_states}
 
-    def output_layer(self, features,index):
+    def output_layer(self, features):
        
         """Project features to the vocabulary size."""
         
@@ -431,7 +423,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             if self.share_input_output_embed:
                 return self.output_projection(features)
             else:
-                return self.output_projection(features,index[:,:,-1])
+                return self.output_projection(features,)
         else:
             return features
 
@@ -520,7 +512,7 @@ class TransformerDecoder(TransformerDecoderBase):
             no_encoder_attn=no_encoder_attn,
             output_projection=output_projection,
         )
-        self.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,dictionary,embed_tokens)
+        # self.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,dictionary,embed_tokens)
 
     def forward(
         self,
@@ -537,7 +529,7 @@ class TransformerDecoder(TransformerDecoderBase):
     ):
         # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
         
-        next_steps=self.next_steps_classifier.forward(src_tokens=prev_output_tokens.detach(),src_lengths=src_lengths)["next_steps"][0]
+        # next_steps=self.next_steps_classifier.forward(src_tokens=prev_output_tokens.detach(),src_lengths=src_lengths)["next_steps"][0]
         #next_steps=NextSteps(next_steps)
         # print(prev_output_tokens.shape)
         # print("input",prev_output_tokens.shape)
@@ -552,7 +544,7 @@ class TransformerDecoder(TransformerDecoderBase):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            next_steps=next_steps
+           
         )
         
 # class TransformerDecoderSection(nn.Module):
