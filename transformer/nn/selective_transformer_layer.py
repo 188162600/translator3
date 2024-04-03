@@ -271,9 +271,9 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             attn_mask=attn_mask.detach() if attn_mask is not None else None,
             
         )
-        print(index.shape,"index")
+        # print(index.shape,"index")
         index=self.layer_attn_output(index[0])
-        print(index.shape,"index")
+        # print(index.shape,"index")
         x = self.activation_fn(self.fc1(x,index))
         x = self.activation_dropout_module(x)
         x = self.fc2(x,index)
