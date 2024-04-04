@@ -36,11 +36,11 @@ class SelectiveLinear(Module):
         selection_probs = F.softmax(selection_logits / temperature, dim=-1)
         
         # Compute weighted sum of weights based on selection probabilities
-        weighted_weights = torch.einsum('nij,bn->bij', self.weight, selection_probs)
+        weighted_weights =self.activation( torch.einsum('nij,bn->bij', self.weight, selection_probs))
         
         if self.bias is not None:
             # Compute weighted sum of biases based on selection probabilities
-            weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+            weighted_biases =self.activation( torch.einsum('ni,bn->bi', self.bias, selection_probs))
             return weighted_weights, weighted_biases
         return weighted_weights, None
 
