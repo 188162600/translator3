@@ -21,7 +21,7 @@ class SelectiveLinear(Module):
         self.out_features = out_features
         self.num_options = num_options
         factory_kwargs = {'device': device, 'dtype': dtype}
-        self.weights = Parameter(torch.empty((num_options, out_features, in_features), **factory_kwargs))
+        self.weight = Parameter(torch.empty((num_options, out_features, in_features), **factory_kwargs))
         if bias:
             self.bias = Parameter(torch.empty(num_options, out_features, **factory_kwargs))
         else:
@@ -29,11 +29,28 @@ class SelectiveLinear(Module):
         self.reset_parameters()
         self.batch_index = batch_index
         self.activation = torch.nn.Tanh()
-
-    def reset_parameters(self) -> None:
-        init.kaiming_uniform_(self.weights, a=math.sqrt(5))
+    def get_batched_weights_biases(self, selection_logits, temperature=1.0):
+        assert selection_logits.dim() == 2
+        
+        # Calculate selection probabilities
+        selection_probs = F.softmax(selection_logits / temperature, dim=-1)
+        
+        # Compute weighted sum of weights based on selection probabilities
+        weighted_weights = torch.einsum('nij,bn->bij', self.weight, selection_probs)
+        
         if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weights)
+            # Compute weighted sum of biases based on selection probabilities
+            weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+            return weighted_weights, weighted_biases
+        return weighted_weights, None
+
+        
+        
+        
+    def reset_parameters(self) -> None:
+        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
@@ -42,7 +59,7 @@ class SelectiveLinear(Module):
             x = x.transpose(0, self.batch_index)
         
         selection_probs = F.softmax(selection_logits / temperature, dim=-1)
-        weighted_weights = torch.einsum('nij,baj->bani', self.weights, x)
+        weighted_weights = torch.einsum('nij,baj->bani', self.weight, x)
         weighted_weights = self.activation(weighted_weights)
         
         final_output = torch.einsum('bani,bn->bai', weighted_weights, selection_probs)

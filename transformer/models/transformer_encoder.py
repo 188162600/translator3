@@ -143,10 +143,19 @@ class TransformerEncoderBase(FairseqEncoder):
             for i in range(1,self.num_layers):
                 self.layers[i].fc1=base_layer.fc1
                 self.layers[i].fc2=base_layer.fc2
+                self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
         if method=="cycle_rev":
             for i in range(1,self.num_layers//2):
                 self.layers[i].fc1=self.layers[self.num_layers-i].fc1
                 self.layers[i].fc2=self.layers[self.num_layers-i].fc2
+                self.layers[i].self_attn.k_proj=self.layers[self.num_layers-i].self_attn.k_proj
+                self.layers[i].self_attn.v_proj=self.layers[self.num_layers-i].self_attn.v_proj
+                self.layers[i].self_attn.q_proj=self.layers[self.num_layers-i].self_attn.q_proj
+                self.layers[i].self_attn.out_proj=self.layers[self.num_layers-i].self_attn.out_proj
+                
 
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None

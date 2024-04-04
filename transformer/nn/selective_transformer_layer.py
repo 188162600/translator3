@@ -10,12 +10,12 @@ import torch.nn as nn
 from torch import Tensor
 from ..nn.selective_linear import SelectiveLinear
 from ..nn.quant_noise import quant_noise
+from ..nn.selective_multihead_attention import SelectiveMultiheadAttention
 
 from fairseq import utils
 from fairseq.models.transformer import TransformerConfig
-from fairseq.modules import LayerNorm, MultiheadAttention
 from fairseq.modules.fairseq_dropout import FairseqDropout
-
+from fairseq.modules import LayerNorm
 import fairseq.modules.transformer_layer as fairseq_transformer_layer
 
 class SelectiveTransformerEncoderLayerBase(nn.Module):
@@ -178,7 +178,8 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.fc2.bias = torch.nn.Parameter(new_fc2_bias)
 
     def build_self_attention(self, embed_dim, cfg):
-        return MultiheadAttention(
+        return SelectiveMultiheadAttention(
+            cfg.encoder.options_each_layer,
             embed_dim,
             cfg.encoder.attention_heads,
             dropout=cfg.attention_dropout,
@@ -234,6 +235,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         # the attention weight (before softmax) for some padded element in query
         # will become -inf, which results in NaN in model parameters
         #print(index)
+        # print("x",x.shape,"index",index.shape)
         if attn_mask is not None:
             attn_mask = attn_mask.masked_fill(
                 attn_mask.to(torch.bool), -1e8 if x.dtype == torch.float32 else -1e4
@@ -249,6 +251,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             key_padding_mask=encoder_padding_mask,
             need_weights=False,
             attn_mask=attn_mask,
+            index=index
         )
         x = self.dropout_module(x)
         x = self.residual_connection(x, residual)
@@ -638,7 +641,8 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
     def build_self_attention(
         self, embed_dim, cfg, add_bias_kv=False, add_zero_attn=False
     ):
-        return MultiheadAttention(
+        return SelectiveMultiheadAttention(
+            cfg.decoder.options_each_layer,
             embed_dim,
             cfg.decoder.attention_heads,
             dropout=cfg.attention_dropout,
@@ -651,7 +655,8 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         )
 
     def build_encoder_attention(self, embed_dim, cfg):
-        return MultiheadAttention(
+        return SelectiveMultiheadAttention(
+            cfg.decoder.options_each_layer,
             embed_dim,
             cfg.decoder.attention_heads,
             kdim=cfg.encoder.embed_dim,
@@ -747,6 +752,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             incremental_state=incremental_state,
             need_weights=False,
             attn_mask=self_attn_mask,
+            index=index
         )
         if self.c_attn is not None:
             tgt_len, bsz = x.size(0), x.size(1)
@@ -784,6 +790,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
                 static_kv=True,
                 need_weights=need_attn or (not self.training and self.need_attn),
                 need_head_weights=need_head_weights,
+                index=index
             )
             x = self.dropout_module(x)
             x = self.residual_connection(x, residual)
