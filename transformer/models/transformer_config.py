@@ -67,56 +67,55 @@ class EncDecBaseConfig(FairseqDataclass):
     # def __setattr__(self, __name: str, __value: re.Any) -> None:
     #     if isinstance(__value,)
     #     return super().__setattr__(__name, __value)
+
+ 
+@dataclass
+class EncDecClassifierConfig(EncDecBaseConfig):
+ 
+    layers: int = field(default=4, metadata={"help": "number of layers"})
+    sharing_method: str = field(
+        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
+    )
+    
+    steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
+    num_steps:int = field(
+        default=II("model.encoder/decoder.layers"),
+        metadata={"help":"number of steps"}
+    )
+    attention_heads:int=II("model.encoder/decoder.attention_heads")
+    layerdrop=II("model.encoder/decoder.layerdrop")
+    
+@dataclass
+class DecoderStepsClassifierConfig(EncDecClassifierConfig):
+    
+    layers:int = field(
+        default=2,metadata={"help":"number of decoder layers"}
+    )
+
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
     )
-    classifier_learn_epoch:int = field(
-        default=5,metadata={"help":"number of epochs to train the classifier"}
-    )
-    
+    classifier:EncDecClassifierConfig=field(default_factory=EncDecClassifierConfig)
     options_each_layer:int = field(
-        default=12,metadata={"help":"number of options"}
+        default=6,metadata={"help":"number of options"}
     )
- 
     
-    
-    # # total_options:int=None
-    # steps_classifier_shared_classes:int = field(
-    #     default=II("model.encoder.shared_options_each_layer"),
-    # )
-    # steps_classifier_non_shared_classes:int = field(
-    #     default=II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"),
-    # )
-    classifier_layers:int = field(
-        default=4,metadata={"help":"number of classifier layers"}
-    )
-    steps_classifier_classes:int = field(
-        default=II("model.encoder.options_each_layer"),
-        metadata={"help":"number of classes in the classifier"}
-    )
-    num_steps:int = field(
-        default=II("model.encoder.layers"),
-        metadata={"help":"number of steps"}
-    )
     def __post_init__(self):
-        #  II doesn't work if we are just creating the object outside of hydra so fix that
-        #super().__post_init__()
-        if self.num_steps == II("model.encoder.layers"):
-            self.num_steps = self.layers
-        if self.steps_classifier_classes == II("model.encoder.options_each_layer"):
-            self.steps_classifier_classes = self.options_each_layer
+        if self.classifier.num_steps == II("model.encoder/decoder.layers"):
+            self.classifier.num_steps = self.layers
+        if self.classifier.steps_classifier_classes == II("model.encoder/decoder.options_each_layer"):
+            self.classifier.steps_classifier_classes = self.options_each_layer
+        if self.classifier.attention_heads == II("model.encoder/decoder.attention_heads"):
+            self.classifier.attention_heads = self.attention_heads
+        if self.classifier.layerdrop == II("model.encoder/decoder.layerdrop"):
+            self.classifier.layerdrop = self.layerdrop
        
-        #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        #if self.total_options is None:
-        # self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        # print(self.total_options,"total options")
-    
-    # num_encoder_layers:int = field(
-    #     default=1,metadata={"help":"number of encoder layers"}
-    # )
-    
+    # def __setattr__(self, name: str, value: re.Any) -> None:
+    #     if name=="layers":
+    #         self.classifier.layers=value
+    #     return super().__setattr__(name, value)
 
 # @dataclass
 # class EncoderStepsClassifierConfig(EncDecBaseConfig):
@@ -144,12 +143,8 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     
 @dataclass
 class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
-    classifier_layers:int = field(
-        default=2,metadata={"help":"number of classifier layers"}
-    )
-    num_decoder_layers:int = field(
-        default=4,metadata={"help":"number of decoder layers"}
-    )
+  
+    classifier:EncDecClassifierConfig=field(default_factory=DecoderStepsClassifierConfig)
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
         default=II("model.decoder.embed_dim"),
@@ -158,34 +153,15 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
         },
     )
    
-    total_options:int=None
-    
-    
-    steps_classifier_classes:int = field(
-        default=II("model.decoder.options_each_layer"),
-        metadata={"help":"number of classes in the classifier"}
-    )
-   
-    
     def __post_init__(self):
-        
-        #  II doesn't work if we are just creating the object outside of hydra so fix that
         if self.input_dim == II("model.decoder.embed_dim"):
             self.input_dim = self.embed_dim
         if self.output_dim == II("model.decoder.embed_dim"):
             self.output_dim = self.embed_dim
-        # if self.num_steps == II("model.decoder.layers+2"):
-        #     self.num_steps = self.layers+2
-            
+     
 
-        if self.steps_classifier_classes == II("model.decoder.options_each_layer"):
-            self.steps_classifier_classes = self.options_each_layer
-    
         super().__post_init__()
-        # if self.total_options is None:
-        #     self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        
-        
+      
 
 
 @dataclass

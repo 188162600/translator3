@@ -151,7 +151,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         else:
             self.layers = nn.ModuleList([])
         self.layers.extend(
-            [self.build_encoder_layer(transformer_cfg) for i in range(classifier_cfg.classifier_layers)]
+            [self.build_encoder_layer(transformer_cfg) for i in range(classifier_cfg.layers)]
         )
         self.num_layers = len(self.layers)
 
@@ -427,7 +427,7 @@ class TransformerEncoderStepsClassifier(TransformerStepsClassifierBase):
         #print(transformer_cfg.encoder_steps_classifier is None)
         super().__init__(
            transformer_cfg,
-           transformer_cfg.encoder,
+           transformer_cfg.encoder.classifier,
             dictionary,
             embed_tokens,
             return_fc=return_fc,
@@ -438,7 +438,7 @@ class TransformerDecoderStepsClassifier(TransformerStepsClassifierBase):
        
         super().__init__(
            transformer_cfg,
-           transformer_cfg.decoder,
+           transformer_cfg.decoder.classifier,
             dictionary,
             embed_tokens,
             return_fc=return_fc,
