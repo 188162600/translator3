@@ -79,7 +79,7 @@ class EncDecClassifierConfig(EncDecBaseConfig):
     
     steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
     num_steps:int = field(
-        default=II("model.encoder/decoder.layers"),
+        default=II("model.encoder/decoder.layers*2"),
         metadata={"help":"number of steps"}
     )
     attention_heads:int=II("model.encoder/decoder.attention_heads")
@@ -113,8 +113,8 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     )
     
     def __post_init__(self):
-        if self.classifier.num_steps == II("model.encoder/decoder.layers"):
-            self.classifier.num_steps = self.layers
+        if self.classifier.num_steps == II("model.encoder/decoder.layers*2"):
+            self.classifier.num_steps = self.layers*2
         if self.classifier.steps_classifier_classes == II("model.encoder/decoder.options_each_layer"):
             self.classifier.steps_classifier_classes = self.options_each_layer
         if self.classifier.attention_heads == II("model.encoder/decoder.attention_heads"):

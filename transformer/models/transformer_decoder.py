@@ -417,7 +417,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,:,idx]
+                index=index[:,:,idx*2:idx*2+2]
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
@@ -450,7 +450,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             if self.share_input_output_embed:
                 return self.output_projection(features)
             else:
-                return self.output_projection(features,index[:,:,-1])
+                return self.output_projection(features)
         else:
             return features
 

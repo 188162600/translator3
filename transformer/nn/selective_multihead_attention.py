@@ -274,91 +274,9 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         assert key is not None and value is not None
         batch= query.size(1)
         query_length=query.size(0)
-        def move_batch_to_dim(x):
        
-            length= x.size(0)
-           
-            return x.reshape(length,1,self.embed_dim*batch)
-        
-        # def move_batch_to_head(x):
-        #     return x.view(-1, batch, self.num_heads, self.head_dim)
-        unbatched_query = move_batch_to_dim(query)
-        unbatched_key = move_batch_to_dim(key)
-        unbatched_value = move_batch_to_dim(value)
-        batched_weight_k,batched_bias_k=self.k_proj.get_batched_weights_biases(index)
-        batched_weight_v,batched_bias_v=self.v_proj.get_batched_weights_biases(index)
-        batched_weight_q,batched_bias_q=self.q_proj.get_batched_weights_biases(index)
-        batched_out_weight,batched_out_bias=self.out_proj.get_batched_weights_biases(index)
-        
-        unbatched_weight_k=batched_weight_k.reshape(batched_weight_k.size(0)*batched_weight_k.size(1),batched_weight_k.size(2)).repeat(1,batch)
-        unbatched_bias_k=batched_bias_k.reshape(batched_bias_k.size(0)*batched_bias_k.size(1))
-        unbatched_weight_v=batched_weight_v.reshape(batched_weight_v.size(0)*batched_weight_v.size(1),batched_weight_v.size(2)).repeat(1,batch)
-        unbatched_bias_v=batched_bias_v.reshape(batched_bias_v.size(0)*batched_bias_v.size(1))
-        unbatched_weight_q=batched_weight_q.reshape(batched_weight_q.size(0)*batched_weight_q.size(1),batched_weight_q.size(2)).repeat(1,batch)
-        unbatched_bias_q=batched_bias_q.reshape(batched_bias_q.size(0)*batched_bias_q.size(1))
-        unbatched_out_weight=batched_out_weight.reshape(batched_out_weight.size(0)*batched_out_weight.size(1),batched_out_weight.size(2)).repeat(1,batch)
-        unbatched_out_bias=batched_out_bias.reshape(batched_out_bias.size(0)*batched_out_bias.size(1))
-        
-        
-        
-        if (
-            not self.onnx_trace
-            and not is_tpu  # don't use PyTorch version on TPUs
-            and incremental_state is None
-            and not static_kv
-            # A workaround for quantization to work. Otherwise JIT compilation
-            # treats bias in linear module as method.
-            and not torch.jit.is_scripting()
-            # The Multihead attention implemented in pytorch forces strong dimension check
-            # for input embedding dimention and K,Q,V projection dimension.
-            # Since pruning will break the dimension check and it is not easy to modify the pytorch API,
-            # it is preferred to bypass the pytorch MHA when we need to skip embed_dim_check
-            and not self.skip_embed_dim_check
-        ):
-            assert key is not None and value is not None
-
-            # if self.use_xformers:
-            #     attn_output,attn_output_weights= self._xformers_attn_forward(
-            #         query, key, value, key_padding_mask, need_weights, attn_mask
-            #     )
-
-            # else:
-            
-            attn,attn_weights = F.multi_head_attention_forward(
-                unbatched_query,
-                unbatched_key,
-                unbatched_value,
-                
-                self.embed_dim*batch,
-                self.num_heads,
-                torch.empty([0]),
-                torch.cat((unbatched_bias_q,unbatched_bias_k,unbatched_bias_v),0),
-                self.bias_k,
-                self.bias_v,
-                self.add_zero_attn,
-                self.dropout_module.p,
-                unbatched_out_weight,
-                unbatched_out_bias,
-                self.training or self.dropout_module.apply_during_inference,
-                key_padding_mask.bool() if key_padding_mask is not None else None,
-                need_weights,
-                attn_mask,
-                use_separate_proj_weight=True,
-                q_proj_weight=unbatched_weight_q,
-                k_proj_weight=unbatched_weight_k,
-                v_proj_weight=unbatched_weight_v,
-            )
-    
-        if incremental_state is not None:
-            saved_state = self._get_input_buffer(incremental_state)
-            if saved_state is not None and "prev_key" in saved_state:
-                # previous time steps are cached - no need to recompute
-                # key and value if they are static
-                if static_kv:
-                    assert self.encoder_decoder_attention and not self.self_attention
-                    key = value = None
-        else:
-            saved_state = None
+       
+        saved_state = None
 
         if self.self_attention:
             q = self.q_proj(query, index)
@@ -573,7 +491,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         
         attn = attn.reshape(query_length,batch,-1)
         if attn_weights is not None:
-            attn_weights = attn_weights.reshape(self.num_heads,batch,query_length,src_len) 
+            attn_weights = attn_weights.reshape(self.num_heads,batch,query_length,-1) 
        
         return attn, attn_weights 
         

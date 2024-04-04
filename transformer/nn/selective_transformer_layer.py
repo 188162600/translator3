@@ -251,7 +251,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             key_padding_mask=encoder_padding_mask,
             need_weights=False,
             attn_mask=attn_mask,
-            index=index
+            index=index[:,:,1]
         )
         x = self.dropout_module(x)
         x = self.residual_connection(x, residual)
@@ -262,9 +262,9 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         if self.normalize_before:
             x = self.final_layer_norm(x)
         #print("x",x.shape,"index",index.shape)
-        x = self.activation_fn(self.fc1(x,index))
+        x = self.activation_fn(self.fc1(x,index[:,:,0]))
         x = self.activation_dropout_module(x)
-        x = self.fc2(x,index)
+        x = self.fc2(x,index[:,:,0])
 
         fc_result = x
 
@@ -752,7 +752,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             incremental_state=incremental_state,
             need_weights=False,
             attn_mask=self_attn_mask,
-            index=index
+            index=index[:,:,1]
         )
         if self.c_attn is not None:
             tgt_len, bsz = x.size(0), x.size(1)
@@ -790,7 +790,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
                 static_kv=True,
                 need_weights=need_attn or (not self.training and self.need_attn),
                 need_head_weights=need_head_weights,
-                index=index
+                index=index[:,:,1]
             )
             x = self.dropout_module(x)
             x = self.residual_connection(x, residual)
@@ -801,11 +801,11 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         if self.normalize_before:
             x = self.final_layer_norm(x)
 
-        x = self.activation_fn(self.fc1(x,index))
+        x = self.activation_fn(self.fc1(x,index[:,:,0]))
         x = self.activation_dropout_module(x)
         if self.ffn_layernorm is not None:
             x = self.ffn_layernorm(x)
-        x = self.fc2(x,index)
+        x = self.fc2(x,index[:,:,0])
         x = self.dropout_module(x)
         if self.w_resid is not None:
             residual = torch.mul(self.w_resid, residual)
