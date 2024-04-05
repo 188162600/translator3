@@ -490,8 +490,8 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         
         
         attn = attn.reshape(query_length,batch,-1)
-        if attn_weights is not None:
-            attn_weights = attn_weights.reshape(self.num_heads,batch,query_length,-1) 
+        # if attn_weights is not None:
+        #     attn_weights = attn_weights.reshape(self.num_heads,batch,query_length,-1) 
        
         return attn, attn_weights 
         

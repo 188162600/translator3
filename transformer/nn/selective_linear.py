@@ -55,6 +55,7 @@ class SelectiveLinear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     def forward(self, x, selection_logits, temperature=1.0):
+        print("selection_logits",selection_logits.shape,"x shape",x.shape)
         if self.batch_index != 0:
             x = x.transpose(0, self.batch_index)
         
