@@ -111,7 +111,12 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     options_each_layer:int = field(
         default=8,metadata={"help":"number of options"}
     )
-    
+    def __setattr__(self, name: str, value: re.Any) -> None:
+        if name=="layers":
+            self.classifier.num_steps=value*2
+        if name=="options_each_layer":
+            self.classifier.steps_classifier_classes=value
+        return super().__setattr__(name, value)
     def __post_init__(self):
         if self.classifier.num_steps == II("model.encoder/decoder.layers*2"):
             self.classifier.num_steps = self.layers*2
