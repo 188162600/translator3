@@ -72,7 +72,7 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class EncDecClassifierConfig(EncDecBaseConfig):
  
-    layers: int = field(default=4, metadata={"help": "number of layers"})
+    layers: int = field(default=6, metadata={"help": "number of layers"})
     sharing_method: str = field(
         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
     )
@@ -99,7 +99,7 @@ class EncDecClassifierConfig(EncDecBaseConfig):
 class DecoderStepsClassifierConfig(EncDecClassifierConfig):
     
     layers:int = field(
-        default=4,metadata={"help":"number of decoder layers"}
+        default=6,metadata={"help":"number of decoder layers"}
     )
 
 @dataclass
