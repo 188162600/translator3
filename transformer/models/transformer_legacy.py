@@ -321,7 +321,8 @@ def transformer_wmt_en_de(args):
     args.encoder_classifier_layer = getattr(args, "encoder_classifier_layer", 4)
     args.decoder_classifier_layer = getattr(args, "decoder_classifier_layer", 4)
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de3")
-def base_architecture(args):
+def transformer_wmt_en_de(args):
+    base_architecture(args)
     args.encoder_layers = getattr(args, "encoder_layers", 6)
     args.decoder_layers = getattr(args, "decoder_layers", 6)
     args.encoder_options_each_layer = getattr(args, "encoder_options_each_layer", 8)
