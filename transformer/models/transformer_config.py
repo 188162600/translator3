@@ -109,7 +109,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     )
     classifier:EncDecClassifierConfig=field(default_factory=EncDecClassifierConfig)
     options_each_layer:int = field(
-        default=6,metadata={"help":"number of options"}
+        default=8,metadata={"help":"number of options"}
     )
     
     def __post_init__(self):
