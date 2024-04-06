@@ -111,7 +111,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     options_each_layer:int = field(
         default=8,metadata={"help":"number of options"}
     )
-    def __setattr__(self, name: str, value: re.Any) -> None:
+    def __setattr__(self, name: str, value) -> None:
         if name=="layers":
             self.classifier.num_steps=value*2
         if name=="options_each_layer":
