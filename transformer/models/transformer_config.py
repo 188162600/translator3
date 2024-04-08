@@ -72,7 +72,7 @@ class EncDecBaseConfig(FairseqDataclass):
 @dataclass
 class EncDecClassifierConfig(EncDecBaseConfig):
  
-    layers: int = field(default=4, metadata={"help": "number of layers"})
+    layers: int = field(default=6, metadata={"help": "number of layers"})
     sharing_method: str = field(
         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
     )
@@ -83,13 +83,23 @@ class EncDecClassifierConfig(EncDecBaseConfig):
         metadata={"help":"number of steps"}
     )
     attention_heads:int=II("model.encoder/decoder.attention_heads")
+    
+    normalize_before: bool = field(
+        default=II("model.encoder/decoder.normalize_before"),
+        metadata={"help": "apply layernorm before each block"}
+    )
     layerdrop=II("model.encoder/decoder.layerdrop")
+    learned_pos: bool = field(
+        default=II("model.encoder/decoder.learned_pos"),
+        metadata={"help": "use learned positional embeddings"}
+    )
+    
     
 @dataclass
 class DecoderStepsClassifierConfig(EncDecClassifierConfig):
     
     layers:int = field(
-        default=2,metadata={"help":"number of decoder layers"}
+        default=6,metadata={"help":"number of decoder layers"}
     )
 
 @dataclass
@@ -111,6 +121,10 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
             self.classifier.attention_heads = self.attention_heads
         if self.classifier.layerdrop == II("model.encoder/decoder.layerdrop"):
             self.classifier.layerdrop = self.layerdrop
+        if self.classifier.normalize_before == II("model.encoder/decoder.normalize_before"):
+            self.classifier.normalize_before = self.normalize_before
+        if self.classifier.learned_pos == II("model.encoder/decoder.learned_pos"):
+            self.classifier.learned_pos = self.learned_pos
        
     # def __setattr__(self, name: str, value: re.Any) -> None:
     #     if name=="layers":
