@@ -99,7 +99,7 @@ class EncDecClassifierConfig(EncDecBaseConfig):
 class DecoderStepsClassifierConfig(EncDecClassifierConfig):
     
     layers:int = field(
-        default=4,metadata={"help":"number of decoder layers"}
+        default=6,metadata={"help":"number of decoder layers"}
     )
 
 @dataclass
