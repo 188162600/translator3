@@ -32,7 +32,7 @@ def _get_total_options(sharing_method:str,num_total,num_shared,num_non_shared,nu
 from fairseq.dataclass import FairseqDataclass
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
-    
+   
     embed_path: Optional[str] = field(
         default=None, metadata={"help": "path to pre-trained embedding"}
     )
@@ -69,47 +69,49 @@ class EncDecBaseConfig(FairseqDataclass):
     #     return super().__setattr__(__name, __value)
 
  
-@dataclass
-class EncDecClassifierConfig(EncDecBaseConfig):
+# @dataclass
+# class EncDecClassifierConfig(EncDecBaseConfig):
  
-    layers: int = field(default=6, metadata={"help": "number of layers"})
-    sharing_method: str = field(
-        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
-    )
+#     layers: int = field(default=6, metadata={"help": "number of layers"})
+#     sharing_method: str = field(
+#         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
+#     )
     
-    steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
-    num_steps:int = field(
-        default=II("model.encoder/decoder.layers*2"),
-        metadata={"help":"number of steps"}
-    )
-    attention_heads:int=II("model.encoder/decoder.attention_heads")
+#     steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
+#     num_steps:int = field(
+#         default=II("model.encoder/decoder.layers*2"),
+#         metadata={"help":"number of steps"}
+#     )
+#     attention_heads:int=II("model.encoder/decoder.attention_heads")
     
-    normalize_before: bool = field(
-        default=II("model.encoder/decoder.normalize_before"),
-        metadata={"help": "apply layernorm before each block"}
-    )
-    layerdrop=II("model.encoder/decoder.layerdrop")
-    learned_pos: bool = field(
-        default=II("model.encoder/decoder.learned_pos"),
-        metadata={"help": "use learned positional embeddings"}
-    )
+#     normalize_before: bool = field(
+#         default=II("model.encoder/decoder.normalize_before"),
+#         metadata={"help": "apply layernorm before each block"}
+#     )
+#     layerdrop=II("model.encoder/decoder.layerdrop")
+#     learned_pos: bool = field(
+#         default=II("model.encoder/decoder.learned_pos"),
+#         metadata={"help": "use learned positional embeddings"}
+#     )
     
     
-@dataclass
-class DecoderStepsClassifierConfig(EncDecClassifierConfig):
+# @dataclass
+# class DecoderStepsClassifierConfig(EncDecClassifierConfig):
     
-    layers:int = field(
-        default=6,metadata={"help":"number of decoder layers"}
-    )
+#     layers:int = field(
+#         default=6,metadata={"help":"number of decoder layers"}
+#     )
 
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     sharing_method: str = field(
         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
     )
-    classifier:EncDecClassifierConfig=field(default_factory=EncDecClassifierConfig)
+    classifier_layers:int=6
+    num_steps:int=II("model.encoder/decoder.layers*2")
+    steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
     options_each_layer:int = field(
-        default=8,metadata={"help":"number of options"}
+        default=6,metadata={"help":"number of options"}
     )
     def __setattr__(self, name: str, value) -> None:
         if hasattr(self,"classifier") :
@@ -119,18 +121,11 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
                 self.classifier.steps_classifier_classes=value
         return super().__setattr__(name, value)
     def __post_init__(self):
-        if self.classifier.num_steps == II("model.encoder/decoder.layers*2"):
-            self.classifier.num_steps = self.layers*2
-        if self.classifier.steps_classifier_classes == II("model.encoder/decoder.options_each_layer"):
-            self.classifier.steps_classifier_classes = self.options_each_layer
-        if self.classifier.attention_heads == II("model.encoder/decoder.attention_heads"):
-            self.classifier.attention_heads = self.attention_heads
-        if self.classifier.layerdrop == II("model.encoder/decoder.layerdrop"):
-            self.classifier.layerdrop = self.layerdrop
-        if self.classifier.normalize_before == II("model.encoder/decoder.normalize_before"):
-            self.classifier.normalize_before = self.normalize_before
-        if self.classifier.learned_pos == II("model.encoder/decoder.learned_pos"):
-            self.classifier.learned_pos = self.learned_pos
+        if self.num_steps == II("model.encoder/decoder.layers*2"):
+            self.num_steps = self.layers*2
+        if self.steps_classifier_classes == II("model.encoder/decoder.options_each_layer"):
+            self.steps_classifier_classes = self.options_each_layer
+            
        
     # def __setattr__(self, name: str, value: re.Any) -> None:
     #     if name=="layers":
@@ -164,7 +159,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
 @dataclass
 class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
   
-    classifier:EncDecClassifierConfig=field(default_factory=DecoderStepsClassifierConfig)
+    # classifier:EncDecClassifierConfig=field(default_factory=DecoderStepsClassifierConfig)
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
         default=II("model.decoder.embed_dim"),

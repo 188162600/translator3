@@ -427,7 +427,7 @@ class TransformerEncoderStepsClassifier(TransformerStepsClassifierBase):
         #print(transformer_cfg.encoder_steps_classifier is None)
         super().__init__(
            transformer_cfg,
-           transformer_cfg.encoder.classifier,
+           transformer_cfg.encoder,
             dictionary,
             embed_tokens,
             return_fc=return_fc,
@@ -438,7 +438,7 @@ class TransformerDecoderStepsClassifier(TransformerStepsClassifierBase):
        
         super().__init__(
            transformer_cfg,
-           transformer_cfg.decoder.classifier,
+           transformer_cfg.decoder,
             dictionary,
             embed_tokens,
             return_fc=return_fc,
