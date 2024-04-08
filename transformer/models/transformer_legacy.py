@@ -301,35 +301,8 @@ def transformer_iwslt_de_en(args):
 
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de")
 def transformer_wmt_en_de(args):
+    args.dropout = getattr(args, "dropout", 0.3)
     base_architecture(args)
-@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de1")
-def transformer_wmt_en_de(args):
-    base_architecture(args)
-    args.encoder_layers = getattr(args, "encoder_layers", 4)
-    args.decoder_layers = getattr(args, "decoder_layers", 4)
-
-    args.encoder_options_each_layer = getattr(args, "encoder_options_each_layer", 6)
-    args.decoder_options_each_layer = getattr(args, "decoder_options_each_layer", 6)
-    args.encoder_classifier_layer = getattr(args, "encoder_classifier_layer", 6)
-    args.decoder_classifier_layer = getattr(args, "decoder_classifier_layer", 6)
-@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de2")
-def transformer_wmt_en_de(args):
-    base_architecture(args)
-    args.encoder_layers = getattr(args, "encoder_layers", 6)
-    args.decoder_layers = getattr(args, "decoder_layers", 6)
-    args.encoder_options_each_layer = getattr(args, "encoder_options_each_layer", 6)
-    args.decoder_options_each_layer = getattr(args, "decoder_options_each_layer", 6)
-    args.encoder_classifier_layer = getattr(args, "encoder_classifier_layer", 4)
-    args.decoder_classifier_layer = getattr(args, "decoder_classifier_layer", 4)
-@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de3")
-def transformer_wmt_en_de(args):
-    base_architecture(args)
-    args.encoder_layers = getattr(args, "encoder_layers", 6)
-    args.decoder_layers = getattr(args, "decoder_layers", 6)
-    args.encoder_options_each_layer = getattr(args, "encoder_options_each_layer", 8)
-    args.decoder_options_each_layer = getattr(args, "decoder_options_each_layer", 8)
-    args.encoder_classifier_layer = getattr(args, "encoder_classifier_layer", 6)
-    args.decoder_classifier_layer = getattr(args, "decoder_classifier_layer", 6)
 
 
 
