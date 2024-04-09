@@ -15,15 +15,16 @@ from typing import Any, Tuple
 
 
 class SelectiveLinear(Module):
-    def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True, batch_index: int = 0, device=None, dtype=None):
+    def __init__(self, total_options:int,num_options: int, in_features: int, out_features: int, bias: bool = True, batch_index: int = 0, device=None, dtype=None):
         super(SelectiveLinear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.num_options = num_options
+        self.total_options=total_options
         factory_kwargs = {'device': device, 'dtype': dtype}
-        self.weight = Parameter(torch.empty((num_options, out_features, in_features), **factory_kwargs))
+        self.weight = Parameter(torch.empty((total_options, out_features, in_features), **factory_kwargs))
         if bias:
-            self.bias = Parameter(torch.empty(num_options, out_features, **factory_kwargs))
+            self.bias = Parameter(torch.empty(total_options, out_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -60,13 +61,21 @@ class SelectiveLinear(Module):
             x = x.transpose(0, self.batch_index)
         
         selection_probs = F.softmax(selection_logits / temperature, dim=-1)
-        weighted_weights = torch.einsum('nij,baj->bani', self.weight, x)
+        # print("selection_probs",selection_probs.shape)
+        selection_probs,indices=torch.topk(selection_probs,self.num_options,dim=-1)
+        # print("selection_probs",selection_probs.shape)
+        weight=self.weight[indices]
+        # print("weight",weight.shape)
+        bias=self.bias[indices]
+        
+        weighted_weights = torch.einsum('bnij,baj->bani', weight, x)
         weighted_weights = self.activation(weighted_weights)
         
         final_output = torch.einsum('bani,bn->bai', weighted_weights, selection_probs)
 
         if self.bias is not None:
-            weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+            
+            weighted_biases = torch.einsum('bni,bn->bi', bias, selection_probs)
             weighted_biases=self.activation(weighted_biases)
             final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
 
@@ -74,9 +83,31 @@ class SelectiveLinear(Module):
             final_output = final_output.transpose(0, self.batch_index)
         
         return final_output
+    
+    #  def forward(self, x, selection_logits, temperature=1.0):
+    #     # print("selection_logits",selection_logits.shape,"x shape",x.shape)
+    #     if self.batch_index != 0:
+    #         x = x.transpose(0, self.batch_index)
+        
+    #     selection_probs = F.softmax(selection_logits / temperature, dim=-1)
+        
+    #     weighted_weights = torch.einsum('nij,baj->bani', self.weight, x)
+    #     weighted_weights = self.activation(weighted_weights)
+        
+    #     final_output = torch.einsum('bani,bn->bai', weighted_weights, selection_probs)
+
+    #     if self.bias is not None:
+    #         weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+    #         weighted_biases=self.activation(weighted_biases)
+    #         final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
+
+    #     if self.batch_index != 0:
+    #         final_output = final_output.transpose(0, self.batch_index)
+        
+    #     return final_output
 
     def extra_repr(self) -> str:
-        return f'num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+        return f'total_options={self.total_options}, num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)

@@ -68,6 +68,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
 
     def __init__(
         self,
+        total_options,
         num_options,
         embed_dim,
         num_heads,
@@ -103,7 +104,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         self.kdim = kdim if kdim is not None else embed_dim
         self.vdim = vdim if vdim is not None else embed_dim
         self.qkv_same_dim = self.kdim == embed_dim and self.vdim == embed_dim
-
+        self.total_options = total_options
         self.num_heads = num_heads
         self.dropout_module = FairseqDropout(
             dropout, module_name=self.__class__.__name__
@@ -123,17 +124,17 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         )
         self.num_options = num_options
         self.k_proj = quant_noise(
-            SelectiveLinear(self.num_options,self.kdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear(self.total_options,self.num_options,self.kdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
         self.v_proj = quant_noise(
-            SelectiveLinear (self.num_options,self.vdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear (self.total_options,self.num_options,self.vdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
         self.q_proj = quant_noise(
-            SelectiveLinear(self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear(self.total_options,self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
 
         self.out_proj = quant_noise(
-            SelectiveLinear(self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear(self.total_options,self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
 
         if add_bias_kv:

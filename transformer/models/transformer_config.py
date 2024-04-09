@@ -108,10 +108,14 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
     )
     classifier_layers:int=6
+    
     num_steps:int=II("model.encoder/decoder.layers*2")
     steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
     options_each_layer:int = field(
-        default=6,metadata={"help":"number of options"}
+        default=4,metadata={"help":"number of options"}
+    )
+    total_options:int=field(
+        default=12,metadata={"help":"total number of options"}
     )
     def __setattr__(self, name: str, value) -> None:
         if hasattr(self,"classifier") :
@@ -124,7 +128,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
         if self.num_steps == II("model.encoder/decoder.layers*2"):
             self.num_steps = self.layers*2
         if self.steps_classifier_classes == II("model.encoder/decoder.options_each_layer"):
-            self.steps_classifier_classes = self.options_each_layer
+            self.steps_classifier_classes = self.total_options
             
        
     # def __setattr__(self, name: str, value: re.Any) -> None:
