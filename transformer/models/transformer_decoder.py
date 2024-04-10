@@ -205,13 +205,15 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
-    def build_sharing(self,method):
-        print("sharing method",method)
-        if method=="all":
-            base_layer=self.layers[0]
+    def build_sharing(self,linear_method,attn_method):
+        base_layer=self.layers[0]
+        if linear_method=="all":
+            
             for i in range(1,self.num_layers):
                 self.layers[i].fc1=base_layer.fc1
                 self.layers[i].fc2=base_layer.fc2
+        if attn_method=="all":
+            for i in range(1,self.num_layers):
                 self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
                 self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
                 self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
@@ -221,10 +223,12 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                     self.layers[i].encoder_attn.v_proj=base_layer.encoder_attn.v_proj
                     self.layers[i].encoder_attn.q_proj=base_layer.encoder_attn.q_proj
                     self.layers[i].encoder_attn.out_proj=base_layer.encoder_attn.out_proj
-        if method=="cycle_rev":
+        if linear_method=="cycle":
             for i in range(1,self.num_layers//2):
                 self.layers[i].fc1=self.layers[self.num_layers-i].fc1
                 self.layers[i].fc2=self.layers[self.num_layers-i].fc2
+        if attn_method=="cycle_rev":
+            for i in range(1,self.num_layers//2):
                 self.layers[i].self_attn.k_proj=self.layers[self.num_layers-i].self_attn.k_proj
                 self.layers[i].self_attn.v_proj=self.layers[self.num_layers-i].self_attn.v_proj
                 self.layers[i].self_attn.q_proj=self.layers[self.num_layers-i].self_attn.q_proj

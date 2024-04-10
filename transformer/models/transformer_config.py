@@ -104,9 +104,13 @@ class EncDecBaseConfig(FairseqDataclass):
 
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
-    sharing_method: str = field(
-        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev"]}
+    linear_sharing_method: str = field(
+        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev","none"]}
     )
+    attn_sharing_method: str = field(
+        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev","none"]}
+    )
+    
     classifier_layers:int=6
     
     num_steps:int=II("model.encoder/decoder.layers*2")
