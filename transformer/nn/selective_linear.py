@@ -22,9 +22,17 @@ class SelectiveLinear(Module):
         self.num_options = num_options
         self.total_options=total_options
         factory_kwargs = {'device': device, 'dtype': dtype}
-        self.weight = Parameter(torch.empty((total_options, out_features, in_features), **factory_kwargs))
+        
+        self.is_non_selective = (self.num_options==1 or self.num_options is None) and ( self.total_options==1 or self.total_options is None)
+        if self.is_non_selective:
+            self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        else:
+            self.weight = Parameter(torch.empty((total_options, out_features, in_features), **factory_kwargs))
         if bias:
-            self.bias = Parameter(torch.empty(total_options, out_features, **factory_kwargs))
+            if self.is_non_selective:
+                self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
+            else:
+                self.bias = Parameter(torch.empty(total_options, out_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -54,16 +62,22 @@ class SelectiveLinear(Module):
             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
-
-    def forward(self, x, selection_logits, temperature=1.0):
+   
+    def forward(self, x, selection_probs,indices=None, temperature=1.0):
         # print("selection_logits",selection_logits.shape,"x shape",x.shape)
+        # print(self.num_options,self.total_options,self.is_non_selective)
+        if self.is_non_selective:
+            # print("non selective")
+            return torch.nn.functional.linear(x, self.weight, self.bias)
         if self.batch_index != 0:
             x = x.transpose(0, self.batch_index)
-        
-        selection_probs = F.softmax(selection_logits / temperature, dim=-1)
-        # print("selection_probs",selection_probs.shape)
-        selection_probs,indices=torch.topk(selection_probs,self.num_options,dim=-1)
-        # print("selection_probs",selection_probs.shape)
+        if isinstance(selection_probs,tuple):
+            selection_probs,indices=selection_probs
+        else:
+            selection_probs = F.softmax(selection_probs / temperature, dim=-1)
+            # print("selection_probs",selection_probs.shape)
+            selection_probs,indices=torch.topk(selection_probs,self.num_options,dim=-1)
+          
         weight=self.weight[indices]
         # print("weight",weight.shape)
         bias=self.bias[indices]

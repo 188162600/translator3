@@ -5,7 +5,7 @@
 
 import math
 from typing import Dict, List, Optional, Tuple
-
+from ..models.transformer_steps_classifier import NextStep
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
@@ -68,8 +68,14 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
 
     def __init__(
         self,
-        total_options,
-        num_options,
+        k_proj_total_options: int,
+        k_proj_num_options: int,
+        v_proj_total_options: int,
+        v_proj_num_options: int,
+        q_proj_total_options: int,
+        q_proj_num_options: int,
+        out_proj_total_options: int,
+        out_proj_num_options: int,
         embed_dim,
         num_heads,
         kdim=None,
@@ -104,7 +110,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         self.kdim = kdim if kdim is not None else embed_dim
         self.vdim = vdim if vdim is not None else embed_dim
         self.qkv_same_dim = self.kdim == embed_dim and self.vdim == embed_dim
-        self.total_options = total_options
+       
         self.num_heads = num_heads
         self.dropout_module = FairseqDropout(
             dropout, module_name=self.__class__.__name__
@@ -122,19 +128,19 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         assert not self.self_attention or self.qkv_same_dim, (
             "Self-attention requires query, key and " "value to be of the same size"
         )
-        self.num_options = num_options
+       
         self.k_proj = quant_noise(
-            SelectiveLinear(self.total_options,self.num_options,self.kdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear(k_proj_total_options,k_proj_num_options,self.kdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
         self.v_proj = quant_noise(
-            SelectiveLinear (self.total_options,self.num_options,self.vdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear (v_proj_total_options,v_proj_num_options,self.vdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
         self.q_proj = quant_noise(
-            SelectiveLinear(self.total_options,self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear(q_proj_total_options,q_proj_num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
 
         self.out_proj = quant_noise(
-            SelectiveLinear(self.total_options,self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+            SelectiveLinear(out_proj_total_options,out_proj_num_options ,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
 
         if add_bias_kv:
@@ -233,7 +239,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         attn_mask: Optional[Tensor] = None,
         before_softmax: bool = False,
         need_head_weights: bool = False,
-        index=None,
+        index:NextStep=None,
     ) -> Tuple[Tensor, Optional[Tensor]]:
         """Input shape: Time x Batch x Channel
 
@@ -280,12 +286,12 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         saved_state = None
 
         if self.self_attention:
-            q = self.q_proj(query, index)
-            k = self.k_proj(query, index)
-            v = self.v_proj(query, index)
+            q = self.q_proj(query, index.get_for_q_proj())
+            k = self.k_proj(query, index.get_for_k_proj())
+            v = self.v_proj(query, index.get_for_v_proj())
         elif self.encoder_decoder_attention:
             # encoder-decoder attention
-            q = self.q_proj(query, index)
+            q = self.q_proj(query, index.get_for_q_proj())
             if key is None:
                 assert value is None
                 k = v = None
@@ -299,14 +305,14 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
                         key_padding_mask = key_padding_mask.view(
                             -1, self.beam_size, key_padding_mask.size(1)
                         )[:, 0, :]
-                k = self.k_proj(key, index)
-                v = self.v_proj(key, index)
+                k = self.k_proj(key, index.get_for_k_proj())
+                v = self.v_proj(key, index.get_for_v_proj())
 
         else:
             assert key is not None and value is not None
-            q = self.q_proj(query, index)
-            k = self.k_proj(key, index)
-            v = self.v_proj(value, index)
+            q = self.q_proj(query, index.get_for_q_proj())
+            k = self.k_proj(key, index.get_for_k_proj())
+            v = self.v_proj(value, index.get_for_v_proj())
         q *= self.scaling
 
         if self.bias_k is not None:
@@ -477,7 +483,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
             attn = attn.contiguous().view(tgt_len, bsz, self.embed_dim)
         else:
             attn = attn.transpose(0, 1).contiguous().view(tgt_len, bsz, self.embed_dim)
-        attn = self.out_proj(attn,index)
+        attn = self.out_proj(attn,index.get_for_out_proj())
         attn_weights: Optional[Tensor] = None
         if need_weights:
             attn_weights = attn_weights_float.view(

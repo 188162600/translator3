@@ -15,7 +15,8 @@ from fairseq import utils
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoder
 from fairseq.models.transformer import TransformerConfig
-
+from ..nn.selective_linear import SelectiveLinear
+from ..models.transformer_steps_classifier import NextSteps
 from fairseq.modules import (
     FairseqDropout,
     LayerDropModuleList,
@@ -118,7 +119,7 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
         else:
             self.layer_norm = None
-        self.build_sharing(cfg.encoder.sharing_method)
+        self.build_sharing(cfg.encoder)
         #self.set_classifier_requires_grad(True)
 
     def build_encoder_layer(self, cfg):
@@ -136,30 +137,23 @@ class TransformerEncoderBase(FairseqEncoder):
         min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
-    def build_sharing(self,linear_method,attn_method):
+    def build_sharing(self,cfg):
         base_layer=self.layers[0]
-        if linear_method=="all":
+        if cfg.sharing_method=="all":
             
             for i in range(1,self.num_layers):
-                self.layers[i].fc1=base_layer.fc1
-                self.layers[i].fc2=base_layer.fc2
-        if attn_method=="all":
-            for i in range(1,self.num_layers):
-                self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
-                self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
-                self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
-                self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
-               
-        if linear_method=="cycle_rev":
-            for i in range(1,self.num_layers//2):
-                self.layers[i].fc1=self.layers[self.num_layers-i].fc1
-                self.layers[i].fc2=self.layers[self.num_layers-i].fc2
-        if attn_method=="cycle_rev":
-            for i in range(1,self.num_layers//2):
-                self.layers[i].self_attn.k_proj=self.layers[self.num_layers-i].self_attn.k_proj
-                self.layers[i].self_attn.v_proj=self.layers[self.num_layers-i].self_attn.v_proj
-                self.layers[i].self_attn.q_proj=self.layers[self.num_layers-i].self_attn.q_proj
-                self.layers[i].self_attn.out_proj=self.layers[self.num_layers-i].self_attn.out_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].fc1=base_layer.fc1
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].fc2=base_layer.fc2
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
               
                 
     
@@ -227,7 +221,7 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        next_steps=None
+        next_steps:NextSteps=None
     ):
         
         """
@@ -287,7 +281,7 @@ class TransformerEncoderBase(FairseqEncoder):
         for idx, layer in enumerate( self.layers):
             
             lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps[:,:,idx*2:idx*2+2]
+                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps[idx]
             )
 
             if isinstance(lr, tuple) and len(lr) == 2:

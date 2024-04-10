@@ -19,7 +19,7 @@ from ..nn import selective_transformer_layer
 from ..nn.confidence_loss import confidence_loss
 from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier
 from ..models.transformer_config import TransformerConfig
-
+from ..models.transformer_steps_classifier import NextSteps
 # from fairseq.models.transformer import TransformerConfig
 from fairseq.modules import (
     AdaptiveSoftmax,
@@ -155,7 +155,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         if self.output_projection is None:
             self.build_output_projection(cfg, dictionary, embed_tokens)
         # self.set_classifier_requires_grad(True)
-        self.build_sharing(cfg.decoder.sharing_method)
+        self.build_sharing(cfg.decoder)
 
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
@@ -205,39 +205,33 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
-    def build_sharing(self,linear_method,attn_method):
+    def build_sharing(self,cfg):
         base_layer=self.layers[0]
-        if linear_method=="all":
+        if cfg.sharing_method=="all":
             
             for i in range(1,self.num_layers):
-                self.layers[i].fc1=base_layer.fc1
-                self.layers[i].fc2=base_layer.fc2
-        if attn_method=="all":
-            for i in range(1,self.num_layers):
-                self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
-                self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
-                self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
-                self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].fc1=base_layer.fc1
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].fc2=base_layer.fc2
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                if isinstance(self.layers[i],SelectiveLinear) and not self.layers[i].is_non_selective:
+                    self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
                 if self.layers[i].encoder_attn is not None:
-                    self.layers[i].encoder_attn.k_proj=base_layer.encoder_attn.k_proj
-                    self.layers[i].encoder_attn.v_proj=base_layer.encoder_attn.v_proj
-                    self.layers[i].encoder_attn.q_proj=base_layer.encoder_attn.q_proj
-                    self.layers[i].encoder_attn.out_proj=base_layer.encoder_attn.out_proj
-        if linear_method=="cycle":
-            for i in range(1,self.num_layers//2):
-                self.layers[i].fc1=self.layers[self.num_layers-i].fc1
-                self.layers[i].fc2=self.layers[self.num_layers-i].fc2
-        if attn_method=="cycle_rev":
-            for i in range(1,self.num_layers//2):
-                self.layers[i].self_attn.k_proj=self.layers[self.num_layers-i].self_attn.k_proj
-                self.layers[i].self_attn.v_proj=self.layers[self.num_layers-i].self_attn.v_proj
-                self.layers[i].self_attn.q_proj=self.layers[self.num_layers-i].self_attn.q_proj
-                self.layers[i].self_attn.out_proj=self.layers[self.num_layers-i].self_attn.out_proj
-                if self.layers[i].encoder_attn is not None:
-                    self.layers[i].encoder_attn.k_proj=self.layers[self.num_layers-i].encoder_attn.k_proj
-                    self.layers[i].encoder_attn.v_proj=self.layers[self.num_layers-i].encoder_attn.v_proj
-                    self.layers[i].encoder_attn.q_proj=self.layers[self.num_layers-i].encoder_attn.q_proj
-                    self.layers[i].encoder_attn.out_proj=self.layers[self.num_layers-i].encoder_attn.out_proj
+                    if isinstance(self.layers[i].encoder_attn,SelectiveLinear) and not self.layers[i].encoder_attn.is_non_selective:
+                        self.layers[i].encoder_attn.k_proj=base_layer.encoder_attn.k_proj
+                    if isinstance(self.layers[i].encoder_attn,SelectiveLinear) and not self.layers[i].encoder_attn.is_non_selective:
+                        self.layers[i].encoder_attn.v_proj=base_layer.encoder_attn.v_proj
+                    if isinstance(self.layers[i].encoder_attn,SelectiveLinear) and not self.layers[i].encoder_attn.is_non_selective:
+                        self.layers[i].encoder_attn.q_proj=base_layer.encoder_attn.q_proj
+                    if isinstance(self.layers[i].encoder_attn,SelectiveLinear) and not self.layers[i].encoder_attn.is_non_selective:
+                        self.layers[i].encoder_attn.out_proj=base_layer.encoder_attn.out_proj
+                   
                 
     
             
@@ -332,7 +326,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
     
-        index=...
+        index:NextSteps=...
     ):
         """
         Similar to *forward* but only return features.
@@ -383,7 +377,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
         if self.quant_noise is not None:
-            x = self.quant_noise(x,index[:,:,0])
+            x = self.quant_noise(x)
 
         if self.project_in_dim is not None:
             x = self.project_in_dim(x)
@@ -421,7 +415,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,:,idx*2:idx*2+2]
+                index=index[idx]
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:

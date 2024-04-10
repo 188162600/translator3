@@ -15,6 +15,7 @@ from fairseq import utils
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoder
 from fairseq.models.transformer import TransformerConfig
+from torch.nn import functional as F
 from fairseq.modules import (
     FairseqDropout,
     LayerDropModuleList,
@@ -79,7 +80,131 @@ def module_name_fordropout(module_name: str) -> str:
 #         if self._confidence is None:
 #             self._confidence=torch.sum(self.get_probability(),dim=1)
 #         #print(self._confidence.grad_fn,"conf")
-        return self._confidence
+        # return self._confidence
+class EncoderAttnNextStep:
+    def __init__(self,selection_logits,indices,cfg ) -> None:
+        self.selection_logits=selection_logits
+        self.indices=indices
+        self.cfg=cfg
+    def get_for_k_proj(self):
+        if self.cfg.k_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_k_proj_selection_index ],self.indices[:,:,self.cfg.encoder_attn_k_proj_selection_index]
+    def get_for_v_proj(self):
+        if self.cfg.v_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_v_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_v_proj_selection_index]
+    def get_for_q_proj(self):
+        if self.cfg.q_proj_selection_index is None:
+            return None,None
+        
+        return self.selection_logits[:,:,self.cfg.encoder_attn_q_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_q_proj_selection_index]
+    def get_for_out_proj(self):
+        if self.cfg.out_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_out_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_out_proj_selection_index]
+    
+    
+class NextStep:
+    def __init__(self,selection_logits,indices,cfg ) -> None:
+        self.selection_logits=selection_logits
+        self.indices=indices
+        self.cfg=cfg
+    def get_for_encoder_attn(self):
+        return EncoderAttnNextStep(self.selection_logits,self.indices,self.cfg)
+    def get_for_fc1(self):
+        if self.cfg.fc1_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.fc1_selection_index ],self.indices[:,:,self.cfg.fc1_selection_index]
+    def get_for_fc2(self):
+        if self.cfg.fc2_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.fc2_selection_index],self.indices[:,:,self.cfg.fc2_selection_index]
+    def get_for_k_proj(self):
+        if self.cfg.k_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.k_proj_selection_index],self.indices[:,:,self.cfg.k_proj_selection_index]
+    def get_for_v_proj(self):
+        if self.cfg.v_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.v_proj_selection_index],self.indices[:,:,self.cfg.v_proj_selection_index]
+    def get_for_q_proj(self):
+        if self.cfg.q_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.q_proj_selection_index],self.indices[:,:,self.cfg.q_proj_selection_index]
+    def get_for_out_proj(self):
+        if self.cfg.out_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.out_proj_selection_index],self.indices[:,:,self.cfg.out_proj_selection_index]
+    def get_for_encoder_attn_k_proj(self):
+        if self.cfg.encoder_attn_k_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_k_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_k_proj_selection_index]
+    def get_for_encoder_attn_v_proj(self):
+        if self.cfg.encoder_attn_v_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_v_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_v_proj_selection_index]
+    def get_for_encoder_attn_q_proj(self):
+        if self.cfg.encoder_attn_q_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_q_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_q_proj_selection_index]
+    def get_for_encoder_attn_out_proj(self):
+        if self.cfg.encoder_attn_out_proj_selection_index is None:
+            return None,None
+        return self.selection_logits[:,:,self.cfg.encoder_attn_out_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_out_proj_selection_index]
+class NextSteps:
+    def __init__(self,tensor,cfg) -> None:
+        self.selection_logits=F.softmax( tensor, dim=1)
+        self.selection_logits,self.indices=torch.topk(self.selection_logits,cfg.options_each_layer,dim=1)
+        self.cfg=cfg
+    def __getitem__(self, index):
+        return NextStep(self.selection_logits[:,:,:,index],self.indices[:,:,:,index],self.cfg)
+    
+    
+    
+    
+    #  if (self.num_options==1 or self.num_options is None) and (self.total_options==1 or self.total_options is None):
+    #         return torch.nn.functional.linear(x, self.weight, self.bias)
+    #     if self.batch_index != 0:
+    #         x = x.transpose(0, self.batch_index)
+        
+    #     selection_probs = F.softmax(selection_logits / temperature, dim=-1)
+    #     # print("selection_probs",selection_probs.shape)
+    #     selection_probs,indices=torch.topk(selection_probs,self.num_options,dim=-1)
+    #     # print("selection_probs",selection_probs.shape)
+    #     weight=self.weight[indices]
+    #     # print("weight",weight.shape)
+    #     bias=self.bias[indices]
+        
+    #     weighted_weights = torch.einsum('bnij,baj->bani', weight, x)
+    #     weighted_weights = self.activation(weighted_weights)
+        
+    #     final_output = torch.einsum('bani,bn->bai', weighted_weights, selection_probs)
+
+    #     if self.bias is not None:
+            
+    #         weighted_biases = torch.einsum('bni,bn->bi', bias, selection_probs)
+    #         weighted_biases=self.activation(weighted_biases)
+    #         final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
+
+    #     if self.batch_index != 0:
+    #         final_output = final_output.transpose(0, self.batch_index)
+        
+    #     return final_output
+    #   self.k_proj = quant_noise(
+    #         SelectiveLinear(self.total_options,self.num_options,self.kdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+    #     )
+    #     self.v_proj = quant_noise(
+    #         SelectiveLinear (self.total_options,self.num_options,self.vdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+    #     )
+    #     self.q_proj = quant_noise(
+    #         SelectiveLinear(self.total_options,self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+    #     )
+
+    #     self.out_proj = quant_noise(
+    #         SelectiveLinear(self.total_options,self.num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
+    #     )
+
 class TransformerStepsClassifierBase(FairseqEncoder):
     """
     Transformer encoder consisting of *classifier_cfg.layers* layers. Each layer
@@ -216,10 +341,13 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         
             
     def build_output_projection(self,  transformer_cfg, classifier_cfg, dictionary, embed_tokens):
-    
+        # print("classifier_cfg.steps_classifier_classes",classifier_cfg.steps_classifier_classes,
+        #       "classifier_cfg.num_steps",classifier_cfg.num_steps,
+        #       "classifier_cfg.steps_classifier_options_each_class",classifier_cfg.steps_classifier_options_each_class,
+            #   classifier_cfg.__class__)
         self.output_projection =torch.nn.Linear(
             embed_tokens.embedding_dim,
-            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps , bias=False
+            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*classifier_cfg.steps_classifier_options_each_class , bias=False
         )
     def build_encoder_layer(self, transformer_cfg):
         layer = TransformerEncoderLayerBase(
@@ -239,8 +367,9 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         
         output= self.output_projection(features[0])
         batch_size=output.size(0)
-        
-        return output.view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps )
+        output=output.view(batch_size,self.classifier_cfg.steps_classifier_options_each_class,self. classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps)
+        # print("output",output.shape)
+        return NextSteps(output,self.classifier_cfg)
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
     ):

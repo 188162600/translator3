@@ -305,6 +305,40 @@ def transformer_wmt_en_de(args):
     base_architecture(args)
 
 
+@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_linear_shared")
+def transformer_wmt_en_de_linear_shared(args):
+
+    args.encoder_k_proj_selection_index=getattr(args, "encoder_k_proj_selection_index", None)
+    args.encoder_v_proj_selection_index=getattr(args, "encoder_v_proj_selection_index", None)
+    args.encoder_q_proj_selection_index=getattr(args, "encoder_q_proj_selection_index", None)
+    args.encoder_out_proj_selection_index=getattr(args, "encoder_out_proj_selection_index", None)
+    
+    args.decoder_k_proj_selection_index=getattr(args, "decoder_k_proj_selection_index", None)
+    args.decoder_v_proj_selection_index=getattr(args, "decoder_v_proj_selection_index", None)
+    args.decoder_q_proj_selection_index=getattr(args, "decoder_q_proj_selection_index", None)
+    args.decoder_out_proj_selection_index=getattr(args, "decoder_out_proj_selection_index", None)
+    
+    args.decoder_encoder_attn_k_proj_selection_index=getattr(args, "decoder_k_proj_selection_index", None)
+    args.decoder_encoder_attn_v_proj_selection_index=getattr(args, "decoder_v_proj_selection_index", None)
+    args.decoder_encoder_attn_q_proj_selection_index=getattr(args, "decoder_q_proj_selection_index", None)
+    args.decoder_encoder_attn_out_proj_selection_index=getattr(args, "decoder_out_proj_selection_index", None)
+
+  
+   
+    transformer_wmt_en_de(args)
+    
+# @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_attn_shared")
+# def transformer_wmt_en_de_attn_shared(args):
+#     args.linear_sharing_mode = getattr(args, "linear_sharing_mode", "none")
+#     args.linear_total_options = getattr(args, "linear_total_options", 1)
+#     args.linear_options_each_layer = getattr(args, "linear_options_each_layer", 1)
+#     args.attn_sharing_mode = getattr(args, "attn_sharing_mode", "all")
+#     args.attn_options_each_layer = getattr(args, "attn_options_each_layer", 12)
+#     args.attn_total_options = getattr(args, "attn_total_options", 12)
+    
+    
+#     transformer_wmt_en_de(args)
+
 
 
 # parameters used in the "Attention Is All You Need" paper (Vaswani et al., 2017)

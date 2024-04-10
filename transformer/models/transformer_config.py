@@ -104,23 +104,43 @@ class EncDecBaseConfig(FairseqDataclass):
 
 @dataclass
 class SelectiveEncDecBaseConfig(EncDecBaseConfig):
-    linear_sharing_method: str = field(
+    sharing_method: str = field(
         default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev","none"]}
     )
-    attn_sharing_method: str = field(
-        default="all", metadata={"help": "sharing method", "choices":["all","cycle_rev","none"]}
+    
+    fc1_selection_index:int=field(
+        default=0,metadata={"help":"index of the first linear layer to select"}
     )
+    fc2_selection_index:int=field(
+        default=1,metadata={"help":"index of the second linear layer to select"}
+    )
+    k_proj_selection_index:int=field(
+        default=2,metadata={"help":"index of the k_proj layer to select"}
+    )
+    v_proj_selection_index:int=field(
+        default=3,metadata={"help":"index of the v_proj layer to select"}
+    )
+    q_proj_selection_index:int=field(
+        default=4,metadata={"help":"index of the q_proj layer to select"}
+    )
+    out_proj_selection_index:int=field(
+        default=5,metadata={"help":"index of the out_proj layer to select"}
+    )
+    steps_classifier_classes:int=...
+    
+    steps_classifier_options_each_class:int=field(
+        default=II("model.encoder/decoder.options_each_layer")
+    )
+    
     
     classifier_layers:int=6
     
-    num_steps:int=II("model.encoder/decoder.layers*2")
-    steps_classifier_classes:int=II("model.encoder/decoder.options_each_layer")
-    options_each_layer:int = field(
-        default=4,metadata={"help":"number of options"}
-    )
-    total_options:int=field(
-        default=12,metadata={"help":"total number of options"}
-    )
+    num_steps:int=II("model.encoder/decoder.layers")
+ 
+    total_options:int = 12
+    options_each_layer:int=4
+    
+   
     def __setattr__(self, name: str, value) -> None:
         if hasattr(self,"classifier") :
             if name=="layers":
@@ -129,11 +149,14 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
                 self.classifier.steps_classifier_classes=value
         return super().__setattr__(name, value)
     def __post_init__(self):
-        if self.num_steps == II("model.encoder/decoder.layers*2"):
-            self.num_steps = self.layers*2
-        if self.steps_classifier_classes == II("model.encoder/decoder.options_each_layer"):
-            self.steps_classifier_classes = self.total_options
-            
+        if self.num_steps == II("model.encoder/decoder.layers"):
+            self.num_steps = self.layers
+        if self.steps_classifier_options_each_class == II("model.encoder/decoder.options_each_layer"):
+            self.steps_classifier_options_each_class = self.options_each_layer
+        if self.steps_classifier_classes is ...:
+            self.steps_classifier_classes =max(self.fc1_selection_index,self.fc2_selection_index,self.k_proj_selection_index,self.v_proj_selection_index,self.q_proj_selection_index,self.out_proj_selection_index)+1
+        
+        print("steps classifier classes",self.steps_classifier_classes)
        
     # def __setattr__(self, name: str, value: re.Any) -> None:
     #     if name=="layers":
@@ -175,6 +198,10 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
             "help": "decoder output dimension (extra linear layer if different from decoder embed dim)"
         },
     )
+    encoder_attn_k_proj_selection_index:int=6
+    encoder_attn_v_proj_selection_index:int=7
+    encoder_attn_q_proj_selection_index:int=8
+    encoder_attn_out_proj_selection_index:int=9
    
     def __post_init__(self):
         if self.input_dim == II("model.decoder.embed_dim"):
@@ -182,7 +209,10 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
         if self.output_dim == II("model.decoder.embed_dim"):
             self.output_dim = self.embed_dim
      
-
+        if self.steps_classifier_classes is ...:
+            self.steps_classifier_classes =max(self.fc1_selection_index,self.fc2_selection_index,self.k_proj_selection_index,self.v_proj_selection_index,self.q_proj_selection_index,self.out_proj_selection_index,
+                                               self.encoder_attn_k_proj_selection_index,self.encoder_attn_v_proj_selection_index,self.encoder_attn_q_proj_selection_index,self.encoder_attn_out_proj_selection_index)+1
+        print("steps classifier classes",self.steps_classifier_classes)
         super().__post_init__()
       
 
