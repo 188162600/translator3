@@ -17,7 +17,7 @@ from fairseq.models import FairseqIncrementalDecoder
 from ..nn.selective_linear import SelectiveLinear
 from ..nn import selective_transformer_layer
 from ..nn.confidence_loss import confidence_loss
-from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier,NextSteps
+from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier
 from ..models.transformer_config import TransformerConfig
 
 # from fairseq.models.transformer import TransformerConfig
@@ -167,10 +167,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 tie_proj=cfg.tie_adaptive_proj,
             )
         elif self.share_input_output_embed:
-            # print(self.cfg.decoder.num_options,
-            #     self.embed_tokens.weight.shape[1],
-            #     self.embed_tokens.weight.shape[0],
-            #     batch_index=0,)
+           
             self.output_projection = torch.nn.Linear(
                 #self.cfg.decoder.num_options,
                 self.embed_tokens.weight.shape[1],
@@ -241,7 +238,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
         #print("transformer_decoder.py:forward",prev_output_tokens.shape,index.shape)
-        index=next_steps.get_mapped_indices()
+        
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -249,11 +246,11 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment=full_context_alignment,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
-            index=index
+            index=next_steps
         )
         #print("forward index",index.shape)
         if not features_only:
-            x = self.output_layer(x,index)
+            x = self.output_layer(x,next_steps)
         # if self.next_steps_classifier_requires_grad:
         #     @torch.enable_grad()
         #     def backward_steps_classifier(grad):
@@ -350,7 +347,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
         if self.quant_noise is not None:
-            x = self.quant_noise(x,index[:,0])
+            x = self.quant_noise(x,index[:,:,0])
 
         if self.project_in_dim is not None:
             x = self.project_in_dim(x)
@@ -388,7 +385,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,idx+1]
+                index=index[:,:,idx+1]
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
@@ -421,7 +418,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             if self.share_input_output_embed:
                 return self.output_projection(features)
             else:
-                return self.output_projection(features,index[:,-1])
+                return self.output_projection(features,index[:,:,-1])
         else:
             return features
 

@@ -12,56 +12,63 @@ from torch import Tensor
 from torch.nn import Module, Parameter, init
 import math
 from typing import Any, Tuple
+
+
+
 class SelectiveLinear(Module):
-    def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True,batch_index:int=0, device=None,
-                 dtype=None) -> None:
-        super(SelectiveLinear, self).__init__()
+    def __init__(self,num_options:int, in_features: int, out_features: int, bias: bool = True,batch_index:int=0, device=None,
+                 dtype=None):
+        super().__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.num_options = num_options
         factory_kwargs = {'device': device, 'dtype': dtype}
-        self.weight = Parameter(torch.empty((num_options, out_features, in_features), **factory_kwargs))
+        self.weights = Parameter(torch.empty((num_options, out_features, in_features), **factory_kwargs))
         if bias:
             self.bias = Parameter(torch.empty(num_options, out_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
         self.batch_index=batch_index
-        #print("init weight.shape",self.weight.shape)
-
+        self.activation = torch.nn.Tanh()
+        
+    
     def reset_parameters(self) -> None:
-        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        init.kaiming_uniform_(self.weights, a=math.sqrt(5))
         if self.bias is not None:
-            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weights)
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
+            
 
-    def forward(self, input: Tensor, index: Tensor) -> Tensor:
-        # Ensure the last dimension matches in_features
-        #print("weight.shape",self.weight.shape)
-        assert input.size(
-            -1) == self.in_features, f"Expected the last dimension of input to be {self.in_features}, got {input.size(-1)}"
+    def forward(self, x, selection_logits, temperature=1.0):
+        
+        if self.batch_index!=0:
+            x=x.transpose(0,self.batch_index)
+        # print("x.shape",x.shape,selection_logits.shape,self.num_options)
+        # print("weights.shape",self.weights.shape)
+        # Compute selection probabilities from logits using softmax
+        selection_probs = F.softmax(selection_logits / temperature, dim=-1)
+        # print("Selection probs shape:", selection_probs.shape)
 
-        batch_size=input.size(self.batch_index)
-       # print("batch_size",input.shape, batch_size, index.shape)
-        #print(index.shape)
-        assert batch_size == index.size(0), "Input batch size and index size should match"
+        transformed = torch.einsum('nij,baj->bani', self.weights, x)
+        transformed=self.activation(transformed)
 
-        # Select weights and biases for each item in the batch based on the index
-        selected_weight = self.weight[index]  # Shape: [batch_size, out_features, in_features]
-        selected_bias = self.bias[index] if self.bias is not None else None  # Shape: [batch_size, out_features]
+        # Compute the weighted sum of biases using the selection probabilities
+        weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+        weighted_biases = self.activation(weighted_biases)
+        # Sum the outputs using the selection probabilities to get the final output
+        final_output = torch.einsum('bani,bn->bai', transformed, selection_probs)
 
-        # Reshape input to [batch_size, other_dims, in_features] for batch matrix multiplication
-        input_reshaped = input.reshape(-1, self.in_features)  # Flatten input while keeping the last dimension
-        #print(input_reshaped.view(batch_size, -1, self.in_features).shape, selected_weight.transpose(1, 2).shape)
-        output = torch.bmm(input_reshaped.view(batch_size, -1, self.in_features), selected_weight.transpose(1, 2))
+        # Add the weighted biases to the final output
+        final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
 
-        if selected_bias is not None:
-            output += selected_bias.unsqueeze(1)
-
-        # Reshape output back to original input shape with out_features as the last dimension
-        output_dims = input.shape[:-1] + (self.out_features,)
-        return output.view(*output_dims)
+        if self.batch_index!=0:
+            final_output=final_output.transpose(0,self.batch_index)
+       
+            
+            
+        return final_output
 
     def extra_repr(self) -> str:
         return f'num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
@@ -86,6 +93,82 @@ class SelectiveLinear(Module):
                 state_dict[bias_key]=bias
         return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+
+
+# class SelectiveLinear(Module):
+#     def __init__(self, num_options: int, in_features: int, out_features: int, bias: bool = True,batch_index:int=0, device=None,
+#                  dtype=None) -> None:
+#         super(SelectiveLinear, self).__init__()
+#         self.in_features = in_features
+#         self.out_features = out_features
+#         self.num_options = num_options
+#         factory_kwargs = {'device': device, 'dtype': dtype}
+#         self.weight = Parameter(torch.empty((num_options, out_features, in_features), **factory_kwargs))
+#         if bias:
+#             self.bias = Parameter(torch.empty(num_options, out_features, **factory_kwargs))
+#         else:
+#             self.register_parameter('bias', None)
+#         self.reset_parameters()
+#         self.batch_index=batch_index
+#         #print("init weight.shape",self.weight.shape)
+
+#     def reset_parameters(self) -> None:
+#         init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+#         if self.bias is not None:
+#             fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+#             bound = 1 / math.sqrt(fan_in)
+#             init.uniform_(self.bias, -bound, bound)
+
+#     def forward(self, input: Tensor, index: Tensor) -> Tensor:
+#         # Ensure the last dimension matches in_features
+#         #print("weight.shape",self.weight.shape)
+#         assert input.size(
+#             -1) == self.in_features, f"Expected the last dimension of input to be {self.in_features}, got {input.size(-1)}"
+
+#         batch_size=input.size(self.batch_index)
+#        # print("batch_size",input.shape, batch_size, index.shape)
+#         #print(index.shape)
+#         assert batch_size == index.size(0), "Input batch size and index size should match"
+
+#         # Select weights and biases for each item in the batch based on the index
+#         selected_weight = self.weight[index]  # Shape: [batch_size, out_features, in_features]
+#         selected_bias = self.bias[index] if self.bias is not None else None  # Shape: [batch_size, out_features]
+
+#         # Reshape input to [batch_size, other_dims, in_features] for batch matrix multiplication
+#         input_reshaped = input.reshape(-1, self.in_features)  # Flatten input while keeping the last dimension
+#         #print(input_reshaped.view(batch_size, -1, self.in_features).shape, selected_weight.transpose(1, 2).shape)
+#         output = torch.bmm(input_reshaped.view(batch_size, -1, self.in_features), selected_weight.transpose(1, 2))
+
+#         if selected_bias is not None:
+#             output += selected_bias.unsqueeze(1)
+
+#         # Reshape output back to original input shape with out_features as the last dimension
+#         output_dims = input.shape[:-1] + (self.out_features,)
+#         return output.view(*output_dims)
+
+#     def extra_repr(self) -> str:
+#         return f'num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+#     def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+#         weight_key = prefix + 'weight'
+#         bias_key = prefix + 'bias'
+#         if weight_key  in state_dict:
+            
+#             weight=state_dict[weight_key] 
+#             #print("weight.shape",weight.shape)
+#             if weight.dim()==2:
+#                 weight=weight.unsqueeze(0).expand(self.num_options,-1,-1)
+               
+#                 state_dict[weight_key]=weight
+                
+#         if bias_key  in state_dict:
+#             bias=state_dict[bias_key]
+#             #print("bias.shape",bias.shape)
+#             if bias.dim()==1:
+#                 bias=bias.unsqueeze(0).expand(self.num_options,-1)
+                
+#                 state_dict[bias_key]=bias
+#         return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+#         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
          
     # def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
        

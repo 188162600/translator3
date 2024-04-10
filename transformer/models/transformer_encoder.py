@@ -27,7 +27,7 @@ from fairseq.modules import (
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-from ..models.transformer_steps_classifier import TransformerEncoderStepsClassifier,NextSteps
+from ..models.transformer_steps_classifier import TransformerEncoderStepsClassifier
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -225,8 +225,8 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
-        index=next_steps.get_mapped_indices()
-        assert index is not None
+        # # index=next_steps.get_mapped_indices()
+        # assert index is not None
         
         # compute padding mask
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
@@ -259,7 +259,7 @@ class TransformerEncoderBase(FairseqEncoder):
         for idx, layer in enumerate( self.layers):
             
             lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=index[:,idx]
+                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps[:,:,idx]
             )
 
             if isinstance(lr, tuple) and len(lr) == 2:

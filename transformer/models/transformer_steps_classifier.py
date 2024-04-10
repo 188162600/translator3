@@ -35,50 +35,50 @@ def module_name_fordropout(module_name: str) -> str:
     else:
         return module_name
 
-class NextSteps:
-    def __init__(self,tensor):
-        self.tensor = tensor
+# class NextSteps:
+#     def __init__(self,tensor):
+#         self.tensor = tensor
        
-        self._indices =None
+#         self._indices =None
      
       
-        self._softmax =None
+#         self._softmax =None
      
        
         
-        self._probability =None
+#         self._probability =None
       
-        self.mapped_indices=None
-        self._confidence=None
-    def get_indices(self):
-        if self._indices is None:
-            self._indices = torch.argmax(self.tensor,dim=1)
-        return self._indices
-    def get_mapped_indices(self):
-        return self.mapped_indices
-    def get_softmax(self):
-        #print(torch.is_grad_enabled())
-        if self._softmax is None:
-            #print(self.tensor.grad_fn,"tensor grad_fn",torch.nn.functional.softmax(self.tensor, dim=1).grad_fn)
-            softmax_result_immediate = torch.nn.functional.softmax(self.tensor, dim=1)
-            #print(f"Immediate softmax grad_fn: {softmax_result_immediate.grad_fn}")
-            self._softmax = torch.nn.functional.softmax(self.tensor, dim=1)
-           # print(self._softmax.grad_fn,"softmax grad_fn2")
-        return self._softmax
+#         self.mapped_indices=None
+#         self._confidence=None
+#     def get_indices(self):
+#         if self._indices is None:
+#             self._indices = torch.argmax(self.tensor,dim=1)
+#         return self._indices
+#     def get_mapped_indices(self):
+#         return self.mapped_indices
+#     def get_softmax(self):
+#         #print(torch.is_grad_enabled())
+#         if self._softmax is None:
+#             #print(self.tensor.grad_fn,"tensor grad_fn",torch.nn.functional.softmax(self.tensor, dim=1).grad_fn)
+#             softmax_result_immediate = torch.nn.functional.softmax(self.tensor, dim=1)
+#             #print(f"Immediate softmax grad_fn: {softmax_result_immediate.grad_fn}")
+#             self._softmax = torch.nn.functional.softmax(self.tensor, dim=1)
+#            # print(self._softmax.grad_fn,"softmax grad_fn2")
+#         return self._softmax
    
-    def get_probability(self):
-        if self._probability is None:
-            expanded_indices = self.get_indices().unsqueeze(-1)
-            self._probability = torch. gather(self.get_softmax(), 1,expanded_indices).squeeze(-1)
-            # print(self._probability.grad_fn,"grad_fn")
-            # print(self.tensor.grad_fn,"grad_fn2")
-            # print(self._softmax.grad_fn,"grad_fn3")
-        return self._probability
+#     def get_probability(self):
+#         if self._probability is None:
+#             expanded_indices = self.get_indices().unsqueeze(-1)
+#             self._probability = torch. gather(self.get_softmax(), 1,expanded_indices).squeeze(-1)
+#             # print(self._probability.grad_fn,"grad_fn")
+#             # print(self.tensor.grad_fn,"grad_fn2")
+#             # print(self._softmax.grad_fn,"grad_fn3")
+#         return self._probability
    
-    def get_confidence(self):
-        if self._confidence is None:
-            self._confidence=torch.sum(self.get_probability(),dim=1)
-        #print(self._confidence.grad_fn,"conf")
+#     def get_confidence(self):
+#         if self._confidence is None:
+#             self._confidence=torch.sum(self.get_probability(),dim=1)
+#         #print(self._confidence.grad_fn,"conf")
         return self._confidence
 class TransformerStepsClassifierBase(FairseqEncoder):
     """
@@ -219,7 +219,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
     
         self.output_projection =torch.nn.Linear(
             embed_tokens.embedding_dim,
-            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps , bias=False
+            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*2 , bias=False
         )
     def build_encoder_layer(self, transformer_cfg):
         layer = TransformerEncoderLayerBase(
@@ -240,7 +240,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         output= self.output_projection(features[0])
         batch_size=output.size(0)
         
-        return output.view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps )
+        return output.view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps,2 )
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
     ):
@@ -384,15 +384,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             .contiguous()
         )
         next_steps=self.output_layer(x)
-        next_steps=NextSteps(next_steps)
-        #print("next_steps",next_steps.get_indices())
-        #print("next_steps",next_steps.get_indices().shape,self.index_mapping.shape)
-        # if self.index_mapping is not None:
-        #     next_steps.mapped_indices=torch.gather(self.index_mapping,0,next_steps.get_indices())
-        # else:
-        next_steps.mapped_indices=next_steps.get_indices()
-            #next_steps._indices= next_steps.get_indices()[self.index_mapping]
-        self.last_confidence=next_steps.get_confidence()
+       
         #print("mapped index",next_steps.mapped_indices)
         return {
             "next_steps":[next_steps],
