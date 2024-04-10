@@ -163,8 +163,9 @@ class NextSteps:
 
         # Zero out the logits that are not in the top cfg.steps_classifier_options_each_class
         # This operation modifies self.selection_logits in-place
-        self.selection_logits=self.selection_logits.clone()
-        self.selection_logits.scatter_(1, indices, 0)
+        # self.selection_logits=self.selection_logits.clone()
+        self.selection_logits=self.selection_logits.scatter(1, indices, 0)
+        # self.selection_logits.scatter_(1, indices, 0)
         # print("selection_logits", self.selection_logits.shape)
         # print("selection_logits",self.selection_logits.shape)
         # # print("indices",indices.shape)
