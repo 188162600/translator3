@@ -406,6 +406,7 @@ class TransformerEncoder(TransformerEncoderBase):
         token_embeddings: Optional[torch.Tensor] = None,
     ):
         next_steps=self.next_steps_classifier(src_tokens.detach(),src_lengths)["next_steps"][0]
+        
         #next_steps=NextSteps(next_steps)
         # print("en input",src_tokens.shape)
         # print("en next_steps",next_steps.get_indices().shape)

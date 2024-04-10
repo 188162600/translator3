@@ -30,7 +30,7 @@ class SelectiveLinear(Module):
             self.register_parameter('bias', None)
         self.reset_parameters()
         self.batch_index=batch_index
-        self.activation = torch.nn.Tanh()
+       
         
     
     def reset_parameters(self) -> None:
@@ -45,6 +45,7 @@ class SelectiveLinear(Module):
         
         if self.batch_index!=0:
             x=x.transpose(0,self.batch_index)
+        
         # print("x.shape",x.shape,selection_logits.shape,self.num_options)
         # print("weights.shape",self.weights.shape)
         # Compute selection probabilities from logits using softmax
