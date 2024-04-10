@@ -159,13 +159,13 @@ class NextSteps:
         indices = torch.argsort(self.selection_logits, dim=1)[:, cfg.steps_classifier_options_each_class:]
 
         # Print the shape of the indices used for zeroing out and the shape of the maximum index per row
-        print("indices", indices.shape, torch.argmax(self.selection_logits, dim=1).shape)
+        # print("indices", indices.shape, torch.argmax(self.selection_logits, dim=1).shape)
 
         # Zero out the logits that are not in the top cfg.steps_classifier_options_each_class
         # This operation modifies self.selection_logits in-place
         self.selection_logits=self.selection_logits.clone()
         self.selection_logits.scatter_(1, indices, 0)
-        print("selection_logits", self.selection_logits.shape)
+        # print("selection_logits", self.selection_logits.shape)
         # print("selection_logits",self.selection_logits.shape)
         # # print("indices",indices.shape)
         # print(cfg.steps_classifier_options_each_class,cfg.steps_classifier_total_options,"options")
