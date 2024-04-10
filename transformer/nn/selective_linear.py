@@ -84,10 +84,10 @@ class SelectiveLinear(Module):
         if self.batch_index != 0:
             x = x.transpose(0, self.batch_index)
         
-        print("selection_probs",selection_probs.shape,self.weight.shape,x.shape)
+        # print("selection_probs",selection_probs.shape,self.weight.shape,x.shape)
         
         weighted_weight = torch.einsum('nij,bn->bij', self.weight, selection_probs)
-        print("weighted_weight",weighted_weight.shape)
+        # print("weighted_weight",weighted_weight.shape)
         weighted_weight=self.activation(weighted_weight)
         # Sum the outputs using the selection probabilities to get the final output
         final_output = torch.einsum('bij,bnj->bni', weighted_weight, x)
