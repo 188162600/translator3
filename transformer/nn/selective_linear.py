@@ -63,35 +63,55 @@ class SelectiveLinear(Module):
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
    
-    def forward(self, x, selection_probs,indices=None, temperature=1.0):
+    def forward(self, x, selection_probs):
         # print("selection_logits",selection_logits.shape,"x shape",x.shape)
         # print(self.num_options,self.total_options,self.is_non_selective)
         if self.is_non_selective:
             # print("non selective")
             return torch.nn.functional.linear(x, self.weight, self.bias)
+        # if self.batch_index != 0:
+        #     x = x.transpose(0, self.batch_index)
+        # if isinstance(selection_probs,tuple):
+        #     selection_probs,indices=selection_probs
+        # else:
+        #     selection_probs = F.softmax(selection_probs / temperature, dim=-1)
+        #     # print("selection_probs",selection_probs.shape)
+        #     selection_probs,indices=torch.topk(selection_probs,self.num_options,dim=-1)
+          
+        # weight=self.weight[indices]
+        # # print("weight",weight.shape)
+        # bias=self.bias[indices]
         if self.batch_index != 0:
             x = x.transpose(0, self.batch_index)
-        if isinstance(selection_probs,tuple):
-            selection_probs,indices=selection_probs
-        else:
-            selection_probs = F.softmax(selection_probs / temperature, dim=-1)
-            # print("selection_probs",selection_probs.shape)
-            selection_probs,indices=torch.topk(selection_probs,self.num_options,dim=-1)
-          
-        weight=self.weight[indices]
-        # print("weight",weight.shape)
-        bias=self.bias[indices]
         
-        weighted_weights = torch.einsum('bnij,baj->bani', weight, x)
-        weighted_weights = self.activation(weighted_weights)
+        print("selection_probs",selection_probs.shape,self.weight.shape,x.shape)
         
-        final_output = torch.einsum('bani,bn->bai', weighted_weights, selection_probs)
-
+        weighted_weight = torch.einsum('nij,bn->bij', self.weight, selection_probs)
+        print("weighted_weight",weighted_weight.shape)
+        weighted_weight=self.activation(weighted_weight)
+        # Sum the outputs using the selection probabilities to get the final output
+        final_output = torch.einsum('bij,bnj->bni', weighted_weight, x)
+        
+        
         if self.bias is not None:
-            
-            weighted_biases = torch.einsum('bni,bn->bi', bias, selection_probs)
+            # Compute the weighted sum of biases using the selection probabilities
+            weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
             weighted_biases=self.activation(weighted_biases)
-            final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
+            # Add the weighted biases to the final output
+            final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
+        # weight=self.weight
+        # bias=self.bias
+        
+        # weighted_weights = torch.einsum('nij,baj->bani', weight, x)
+        # weighted_weights = self.activation(weighted_weights)
+        
+        # final_output =  torch.einsum('bani,bn->bai', weighted_weights, selection_probs)
+
+        # if self.bias is not None:
+        #     weighted_biases = torch.einsum('ni,bn->bi', bias, selection_probs)
+
+        #     weighted_biases=self.activation(weighted_biases)
+        #     final_output += weighted_biases.unsqueeze(1).expand(-1, final_output.size(1), -1)
 
         if self.batch_index != 0:
             final_output = final_output.transpose(0, self.batch_index)

@@ -206,6 +206,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
     def build_sharing(self,cfg):
+        print(cfg.steps_classifier_classes,"cfg.steps_classifier_classes")
         base_layer=self.layers[0]
         if cfg.sharing_method=="all":
             

@@ -144,6 +144,9 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     @property
     def steps_classifier_options_each_class(self):
         return self.options_each_layer
+    @property
+    def steps_classifier_total_options(self):
+        return self.total_options
     
     total_options:int = 12
     options_each_layer:int=4

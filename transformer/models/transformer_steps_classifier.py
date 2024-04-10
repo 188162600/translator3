@@ -82,83 +82,102 @@ def module_name_fordropout(module_name: str) -> str:
 #         #print(self._confidence.grad_fn,"conf")
         # return self._confidence
 class EncoderAttnNextStep:
-    def __init__(self,selection_logits,indices,cfg ) -> None:
+    def __init__(self,selection_logits,cfg ) -> None:
         self.selection_logits=selection_logits
-        self.indices=indices
+    
         self.cfg=cfg
     def get_for_k_proj(self):
         if self.cfg.k_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_k_proj_selection_index ],self.indices[:,:,self.cfg.encoder_attn_k_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_k_proj_selection_index ]
     def get_for_v_proj(self):
         if self.cfg.v_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_v_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_v_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_v_proj_selection_index]
     def get_for_q_proj(self):
         if self.cfg.q_proj_selection_index is None:
             return None,None
         
-        return self.selection_logits[:,:,self.cfg.encoder_attn_q_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_q_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_q_proj_selection_index]
     def get_for_out_proj(self):
         if self.cfg.out_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_out_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_out_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_out_proj_selection_index]
     
     
 class NextStep:
-    def __init__(self,selection_logits,indices,cfg ) -> None:
+    def __init__(self,selection_logits,cfg ) -> None:
         self.selection_logits=selection_logits
-        self.indices=indices
+  
         self.cfg=cfg
     def get_for_encoder_attn(self):
-        return EncoderAttnNextStep(self.selection_logits,self.indices,self.cfg)
+        return EncoderAttnNextStep(self.selection_logits,self.cfg)
     def get_for_fc1(self):
         if self.cfg.fc1_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.fc1_selection_index ],self.indices[:,:,self.cfg.fc1_selection_index]
+        return self.selection_logits[:,:,self.cfg.fc1_selection_index ]
     def get_for_fc2(self):
         if self.cfg.fc2_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.fc2_selection_index],self.indices[:,:,self.cfg.fc2_selection_index]
+        return self.selection_logits[:,:,self.cfg.fc2_selection_index]
     def get_for_k_proj(self):
         if self.cfg.k_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.k_proj_selection_index],self.indices[:,:,self.cfg.k_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.k_proj_selection_index]
     def get_for_v_proj(self):
         if self.cfg.v_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.v_proj_selection_index],self.indices[:,:,self.cfg.v_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.v_proj_selection_index]
     def get_for_q_proj(self):
         if self.cfg.q_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.q_proj_selection_index],self.indices[:,:,self.cfg.q_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.q_proj_selection_index]
     def get_for_out_proj(self):
         if self.cfg.out_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.out_proj_selection_index],self.indices[:,:,self.cfg.out_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.out_proj_selection_index]
     def get_for_encoder_attn_k_proj(self):
         if self.cfg.encoder_attn_k_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_k_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_k_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_k_proj_selection_index]
     def get_for_encoder_attn_v_proj(self):
         if self.cfg.encoder_attn_v_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_v_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_v_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_v_proj_selection_index]
     def get_for_encoder_attn_q_proj(self):
         if self.cfg.encoder_attn_q_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_q_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_q_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_q_proj_selection_index]
     def get_for_encoder_attn_out_proj(self):
         if self.cfg.encoder_attn_out_proj_selection_index is None:
             return None,None
-        return self.selection_logits[:,:,self.cfg.encoder_attn_out_proj_selection_index],self.indices[:,:,self.cfg.encoder_attn_out_proj_selection_index]
+        return self.selection_logits[:,:,self.cfg.encoder_attn_out_proj_selection_index]
 class NextSteps:
     def __init__(self,tensor,cfg) -> None:
         self.selection_logits=F.softmax( tensor, dim=1)
-        self.selection_logits,self.indices=torch.topk(self.selection_logits,cfg.options_each_layer,dim=1)
+        
+        indices = torch.argsort(self.selection_logits, dim=1)[:, cfg.steps_classifier_options_each_class:]
+
+        # Print the shape of the indices used for zeroing out and the shape of the maximum index per row
+        print("indices", indices.shape, torch.argmax(self.selection_logits, dim=1).shape)
+
+        # Zero out the logits that are not in the top cfg.steps_classifier_options_each_class
+        # This operation modifies self.selection_logits in-place
+        self.selection_logits=self.selection_logits.clone()
+        self.selection_logits.scatter_(1, indices, 0)
+        print("selection_logits", self.selection_logits.shape)
+        # print("selection_logits",self.selection_logits.shape)
+        # # print("indices",indices.shape)
+        # print(cfg.steps_classifier_options_each_class,cfg.steps_classifier_total_options,"options")
+        # indices=torch.argsort(self.selection_logits,dim=1)[:,cfg.steps_classifier_options_each_class:cfg.steps_classifier_total_options]
+        # print("indices",indices.shape,torch.argmax(self.selection_logits,dim=1).shape)
+        # # Zero out the logits that are not in the top cfg.steps_classifier_options_each_class
+        # self.selection_logits[indices] = 0
+        # print("selection_logits",self.selection_logits.shape)
+
         self.cfg=cfg
     def __getitem__(self, index):
-        return NextStep(self.selection_logits[:,:,:,index],self.indices[:,:,:,index],self.cfg)
+        return NextStep(self.selection_logits[:,:,:,index],self.cfg)
     
     
     
@@ -347,7 +366,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
             #   classifier_cfg.__class__)
         self.output_projection =torch.nn.Linear(
             embed_tokens.embedding_dim,
-            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*classifier_cfg.steps_classifier_options_each_class , bias=False
+            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*classifier_cfg.steps_classifier_total_options , bias=False
         )
     def build_encoder_layer(self, transformer_cfg):
         layer = TransformerEncoderLayerBase(
@@ -367,7 +386,7 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         
         output= self.output_projection(features[0])
         batch_size=output.size(0)
-        output=output.view(batch_size,self.classifier_cfg.steps_classifier_options_each_class,self. classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps)
+        output=output.view(batch_size,self.classifier_cfg.steps_classifier_total_options,self. classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps)
         # print("output",output.shape)
         return NextSteps(output,self.classifier_cfg)
     def forward_embedding(
