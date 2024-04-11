@@ -56,14 +56,14 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.normalize_before = cfg.encoder.normalize_before
         #self.num_options = cfg.encoder.num_options
         self.fc1 = self.build_fc1(
-            cfg.encoder.options_each_layer,
+            cfg.options_each_layer,
             self.embed_dim,
             cfg.encoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.encoder.options_each_layer,
+            cfg.options_each_layer,
             cfg.encoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,
@@ -583,14 +583,14 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         )
 
         self.fc1 = self.build_fc1(
-            cfg.decoder.options_each_layer,
+            cfg.options_each_layer,
             self.embed_dim,
             cfg.decoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.decoder.options_each_layer,
+            cfg.options_each_layer,
             cfg.decoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,

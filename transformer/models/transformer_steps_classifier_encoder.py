@@ -45,7 +45,7 @@ class TransformerStepsClassifierEncoderBase(FairseqEncoder):
         embed_tokens (torch.nn.Embedding): input embedding
     """
 
-    def __init__(self, cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
+    def __init__(self, cfg,dictionary, embed_tokens, return_fc=False):
         self.cfg = cfg
         super().__init__(dictionary)
         self.register_buffer("version", torch.Tensor([3]))
@@ -93,7 +93,7 @@ class TransformerStepsClassifierEncoderBase(FairseqEncoder):
         else:
             self.layers = nn.ModuleList([])
         self.layers.extend(
-            [self.build_encoder_layer(cfg) for i in range(classifier_cfg.classifier_encoder_layers)]
+            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.classifier_layers)]
         )
         self.num_layers = len(self.layers)
 

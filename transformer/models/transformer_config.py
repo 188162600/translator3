@@ -42,6 +42,7 @@ class EncDecBaseConfig(FairseqDataclass):
     ffn_embed_dim: int = field(
         default=2048, metadata={"help": "embedding dimension for FFN"}
     )
+    classifier_layers:int=field(default=3,metadata={"help":"number of classifier layers"})
     layers: int = field(default=6, metadata={"help": "number of layers"})
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
@@ -64,92 +65,13 @@ class EncDecBaseConfig(FairseqDataclass):
             "help": "config for xFormers attention, defined in xformers.components.attention.AttentionConfig"
         },
     )
-    # def __setattr__(self, __name: str, __value: re.Any) -> None:
-    #     if isinstance(__value,)
-    #     return super().__setattr__(__name, __value)
-@dataclass
-class SelectiveEncDecBaseConfig(EncDecBaseConfig):
-    sharing_method: str = field(
-        default="none", metadata={"help": "sharing method"}
-    )
-    classifier_learn_epoch:int = field(
-        default=5,metadata={"help":"number of epochs to train the classifier"}
-    )
-    options_each_layer:int = field(
-        default=4,metadata={"help":"number of options"}
-    )
- 
-    
-    
- 
-    classifier_encoder_layers:int = field(
-        default=3,metadata={"help":"number of classifier layers"}
-    )
-    classifier_decoder_layers:int = field(
-        default=3,metadata={"help":"number of classifier layers"}
-    )
-    
-    steps_classifier_classes:int = field(
-        default=II("model.encoder.options_each_layer"),
-        metadata={"help":"number of classes in the classifier"}
-    )
-    num_steps:int = field(
-        default=II("model.encoder.layers"),
-        metadata={"help":"number of steps"}
-    )
-    def __post_init__(self):
-        #  II doesn't work if we are just creating the object outside of hydra so fix that
-        #super().__post_init__()
-        if self.num_steps == II("model.encoder.layers"):
-            self.num_steps = self.layers
-        if self.steps_classifier_classes == II("model.encoder.options_each_layer"):
-            self.steps_classifier_classes = self.options_each_layer
-       
-        #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        #if self.total_options is None:
-        # self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        # print(self.total_options,"total options")
-    
-    # num_encoder_layers:int = field(
-    #     default=1,metadata={"help":"number of encoder layers"}
-    # )
-    
 
-# @dataclass
-# class EncoderStepsClassifierConfig(EncDecBaseConfig):
-#     layers:int = field(
-#         default=2,metadata={"help":"number of decoder layers"}
-#     )
-#     steps_classifier_classes:int=II("model.encoder.num_options")
-#     num_steps:int=II("model.encoder.layers")
-
-# @dataclass
-# class DecoderStepsClassifierConfig(EncDecBaseConfig):
-#     layers:int = field(
-#         default=4,metadata={"help":"number of decoder layers"}
-#     )
-#     steps_classifier_classes:int=II("model.decoder.num_options")
-#     num_steps:int=field(
-#         default=II("model.decoder.layers+2"),
-#         metadata={"help":"number of decoder layers+embedding and output layers"}
-#     )
-#     def __post_init__(self):
-#         #  II doesn't work if we are just creating the object outside of hydra so fix that
-#         if self.num_steps == II("model.decoder.layers"):
-#             self.num_steps = 
-#     #=II("model.decoder.layers")+2 #input and output embeddings
-    
 @dataclass
-class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
+class DecoderConfig(EncDecBaseConfig):
     # classifier_layers:int = field(
     #     default=2,metadata={"help":"number of classifier layers"}
     # )
-    classifier_encoder_layers:int = field(
-        default=1,metadata={"help":"number of classifier layers"}
-    )
-    classifier_decoder_layers:int = field(
-        default=3,metadata={"help":"number of classifier layers"}
-    )
+  
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
         default=II("model.decoder.embed_dim"),
@@ -158,22 +80,6 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
         },
     )
    
-    num_steps:int = field(
-        default=II("model.decoder.layers+2"),
-        metadata={"help":"layers+embedding and output layers"}
-    )
-    total_options:int=None
-    steps_classifier_shared_classes:int = field(
-        default=II("model.decoder.shared_options_each_layer"),
-    )
-    steps_classifier_non_shared_classes:int = field(
-        default=II("model.decoder.options_each_layer-model.decoder.shared_options_each_layer"),
-    )
-    
-    steps_classifier_classes:int = field(
-        default=II("model.decoder.options_each_layer"),
-        metadata={"help":"number of classes in the classifier"}
-    )
    
     
     def __post_init__(self):
@@ -183,21 +89,6 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
             self.input_dim = self.embed_dim
         if self.output_dim == II("model.decoder.embed_dim"):
             self.output_dim = self.embed_dim
-        if self.num_steps == II("model.decoder.layers+2"):
-            self.num_steps = self.layers+2
-            
-
-        if self.steps_classifier_classes == II("model.decoder.options_each_layer"):
-            self.steps_classifier_classes = self.options_each_layer
-        if self.steps_classifier_shared_classes == II("model.decoder.shared_options_each_layer"):
-            self.steps_classifier_shared_classes = self.shared_options_each_layer
-        if self.steps_classifier_non_shared_classes == II("model.decoder.options_each_layer-model.decoder.shared_options_each_layer"):
-            self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
-        super().__post_init__()
-        # if self.total_options is None:
-        #     self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
-        
-        
 
 
 @dataclass
@@ -220,6 +111,7 @@ class QuantNoiseConfig(FairseqDataclass):
 
 @dataclass
 class TransformerConfig(FairseqDataclass):
+    options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
     activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
         default="relu",
         metadata={"help": "activation function to use"},
@@ -237,14 +129,14 @@ class TransformerConfig(FairseqDataclass):
     )
     adaptive_input: bool = False
     #encoder_steps_classifier:EncoderStepsClassifierConfig=EncoderStepsClassifierConfig()
-    encoder: SelectiveEncDecBaseConfig =field(default_factory=SelectiveEncDecBaseConfig)# None#SelectiveEncDecBaseConfig()
+    encoder: EncDecBaseConfig =field(default_factory=EncDecBaseConfig)# None#SelectiveEncDecBaseConfig()
     # TODO should really be in the encoder config
     max_source_positions: int = field(
         default=DEFAULT_MAX_SOURCE_POSITIONS,
         metadata={"help": "Maximum input length supported by the encoder"},
     )
    # decoder_steps_classifier:DecoderStepsClassifierConfig=DecoderStepsClassifierConfig()
-    decoder: SelectiveDecoderConfig = field(default_factory=SelectiveDecoderConfig) #None#SelectiveDecoderConfig()
+    decoder: DecoderConfig = field(default_factory=DecoderConfig) #None#SelectiveDecoderConfig()
     # TODO should really be in the decoder config
     max_target_positions: int = field(
         default=DEFAULT_MAX_TARGET_POSITIONS,
@@ -424,19 +316,19 @@ class TransformerConfig(FairseqDataclass):
                     if safe_hasattr(args, "decoder"):
                         #  in some cases, the args we receive is already structured (as DictConfigs), so let's just build the correct DC
                         seen.add("decoder")
-                        config.decoder = SelectiveDecoderConfig(**args.decoder)
+                        config.decoder = DecoderConfig(**args.decoder)
                     else:
                         config.decoder = cls._copy_keys(
-                            args, SelectiveDecoderConfig, "decoder", seen
+                            args, DecoderConfig, "decoder", seen
                         )
                 elif fld.name == "encoder":
                     # same but for encoder
                     if safe_hasattr(args, "encoder"):
                         seen.add("encoder")
-                        config.encoder = SelectiveEncDecBaseConfig(**args.encoder)
+                        config.encoder =EncDecBaseConfig(**args.encoder)
                     else:
                         config.encoder = cls._copy_keys(
-                            args, SelectiveEncDecBaseConfig, "encoder", seen
+                            args, EncDecBaseConfig, "encoder", seen
                         )
                 # elif fld.name=="encoder_steps_classifier":
                 #     if safe_hasattr(args, "encoder_steps_classifier"):

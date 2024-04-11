@@ -16,9 +16,9 @@ from fairseq.dataclass.utils import gen_parser_from_dataclass
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoderDecoderModel
 from ..models.transformer_config import TransformerConfig
-from ..models.transformer_decoder import TransformerDecoder
-from ..models.transformer_encoder import TransformerEncoder
-from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier, TransformerEncoderStepsClassifier
+from ..models.transformer_decoder import TransformerDecoderBase
+from ..models.transformer_encoder import TransformerEncoderBase
+from ..models.transformer_steps_classifier import TransformerStepsClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -45,8 +45,9 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
-        encoder.next_steps_classifier=TransformerEncoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
-        decoder.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
+        self.next_steps_classifier=TransformerStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
+        # encoder.next_steps_classifier=TransformerEncoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
+        # decoder.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
     def set_last_loss(self, loss):
         #loss=loss.detach()
         self.encoder.set_last_loss(loss)
@@ -133,11 +134,11 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
 
     @classmethod
     def build_encoder(cls, cfg, src_dict, embed_tokens):
-        return TransformerEncoder(cfg, src_dict, embed_tokens)
+        return TransformerEncoderBase(cfg, src_dict, embed_tokens)
 
     @classmethod
     def build_decoder(cls, cfg, tgt_dict, embed_tokens):
-        return TransformerDecoder(
+        return TransformerDecoderBase(
             cfg,
             tgt_dict,
             embed_tokens,
@@ -162,9 +163,10 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         Copied from the base class, but without ``**kwargs``,
         which are not supported by TorchScript.
         """
+        next_steps_logits,_=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
         
         encoder_out = self.encoder(
-            prev_output_tokens,src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens
+            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps_logits[:,:,:self.cfg.encoder.layers]
         )
         # print("encoder_out",encoder_out["encoder_out"][0].shape)
         decoder_out = self.decoder(
@@ -175,7 +177,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            
+            next_steps=next_steps_logits[:,:,self.cfg.encoder.layers:]
         )
         return decoder_out
 

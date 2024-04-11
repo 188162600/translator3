@@ -17,7 +17,7 @@ from fairseq.models import FairseqIncrementalDecoder
 from ..nn.selective_linear import SelectiveLinear
 from ..nn import selective_transformer_layer
 from ..nn.confidence_loss import confidence_loss
-from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier
+
 from ..models.transformer_config import TransformerConfig
 
 # from fairseq.models.transformer import TransformerConfig
@@ -97,7 +97,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         if not cfg.adaptive_input and cfg.quant_noise.pq > 0:
             self.quant_noise = apply_quant_noise_(
-                 SelectiveLinear(cfg.num_options,embed_dim, embed_dim, bias=False),
+                 torch.nn.Linear(embed_dim, embed_dim, bias=False),
                 cfg.quant_noise.pq,
                 cfg.quant_noise.pq_block_size,
             )
@@ -105,7 +105,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.quant_noise = None
 
         self.project_in_dim = (
-            SelectiveLinear(cfg.num_options,input_embed_dim, embed_dim, bias=False)
+            torch.nn.Linear(input_embed_dim, embed_dim, bias=False)
             if embed_dim != input_embed_dim
             else None
         )
@@ -145,7 +145,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layer_norm = None
 
         self.project_out_dim = (
-            SelectiveLinear(cfg.num_options,embed_dim, self.output_embed_dim, bias=False)
+            torch.nn. Linear(embed_dim, self.output_embed_dim, bias=False)
             if embed_dim != self.output_embed_dim and not cfg.tie_adaptive_weights
             else None
         )
@@ -348,7 +348,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
         if self.quant_noise is not None:
-            x = self.quant_noise(x,index[:,:,0])
+            x = self.quant_noise(x)
 
         if self.project_in_dim is not None:
             x = self.project_in_dim(x)
@@ -386,7 +386,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,:,idx+1]
+                index=index[:,:,idx]
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
@@ -418,8 +418,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             # project back to size of vocabulary
             if self.share_input_output_embed:
                 return self.output_projection(features)
-            else:
-                return self.output_projection(features,index[:,:,-1])
+         
         else:
             return features
 
@@ -491,64 +490,64 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 #     return m
 
 
-class TransformerDecoder(TransformerDecoderBase):
-    def __init__(
-        self,
-        cfg,
-        dictionary,
-        embed_tokens,
-        no_encoder_attn=False,
-        output_projection=None,
-    ):
-        #self.args = args
-        super().__init__(
-            cfg,
-            dictionary,
-            embed_tokens,
-            no_encoder_attn=no_encoder_attn,
-            output_projection=output_projection,
-        )
+# class TransformerDecoder(TransformerDecoderBase):
+#     def __init__(
+#         self,
+#         cfg,
+#         dictionary,
+#         embed_tokens,
+#         no_encoder_attn=False,
+#         output_projection=None,
+#     ):
+#         #self.args = args
+#         super().__init__(
+#             cfg,
+#             dictionary,
+#             embed_tokens,
+#             no_encoder_attn=no_encoder_attn,
+#             output_projection=output_projection,
+#         )
     
-        self.next_steps_classifier=torch.nn.Module()
+#         self.next_steps_classifier=torch.nn.Module()
 
-    def forward(
-        self,
-        prev_output_tokens,
-        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
-        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-        features_only: bool = False,
-        full_context_alignment: bool = False,
-        alignment_layer: Optional[int] = None,
-        alignment_heads: Optional[int] = None,
-        src_lengths: Optional[Any] = None,
-        return_all_hiddens: bool = False,
+#     def forward(
+#         self,
+#         prev_output_tokens,
+#         encoder_out: Optional[Dict[str, List[Tensor]]] = None,
+#         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
+#         features_only: bool = False,
+#         full_context_alignment: bool = False,
+#         alignment_layer: Optional[int] = None,
+#         alignment_heads: Optional[int] = None,
+#         src_lengths: Optional[Any] = None,
+#         return_all_hiddens: bool = False,
        
-    ):
-        # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
-        # print(prev_output_tokens.shape,"prev_output_tokens decoder")
+#     ):
+#         # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
+#         # print(prev_output_tokens.shape,"prev_output_tokens decoder")
         
-        token_embeddings=encoder_out["encoder_out"][0]
-        token_embeddings=token_embeddings.transpose(0,1)
-        # print(token_embeddings.shape,"token_embeddings")
-        # print("decoder forward")
-        next_steps,_=self.next_steps_classifier(src_tokens=None,src_lengths=src_lengths,prev_output_tokens=prev_output_tokens,token_embeddings=token_embeddings)
-        # print(next_steps.shape,"decoder next steps")
-        #next_steps=NextSteps(next_steps)
-        # print(prev_output_tokens.shape)
-        # print("input",prev_output_tokens.shape)
-        # print("next_steps",next_steps.get_indices().shape)
-        return super().forward(
-            prev_output_tokens,
-            encoder_out=encoder_out,
-            incremental_state=incremental_state,
-            features_only=features_only,
-            full_context_alignment=full_context_alignment,
-            alignment_layer=alignment_layer,
-            alignment_heads=alignment_heads,
-            src_lengths=src_lengths,
-            return_all_hiddens=return_all_hiddens,
-            next_steps=next_steps
-        )
+#         token_embeddings=encoder_out["encoder_out"][0]
+#         token_embeddings=token_embeddings.transpose(0,1)
+#         # print(token_embeddings.shape,"token_embeddings")
+#         # print("decoder forward")
+#         next_steps,_=self.next_steps_classifier(src_tokens=None,src_lengths=src_lengths,prev_output_tokens=prev_output_tokens,token_embeddings=token_embeddings)
+#         # print(next_steps.shape,"decoder next steps")
+#         #next_steps=NextSteps(next_steps)
+#         # print(prev_output_tokens.shape)
+#         # print("input",prev_output_tokens.shape)
+#         # print("next_steps",next_steps.get_indices().shape)
+#         return super().forward(
+#             prev_output_tokens,
+#             encoder_out=encoder_out,
+#             incremental_state=incremental_state,
+#             features_only=features_only,
+#             full_context_alignment=full_context_alignment,
+#             alignment_layer=alignment_layer,
+#             alignment_heads=alignment_heads,
+#             src_lengths=src_lengths,
+#             return_all_hiddens=return_all_hiddens,
+#             next_steps=next_steps
+#         )
         
 # class TransformerDecoderSection(nn.Module):
 #     def __init__(self, args,

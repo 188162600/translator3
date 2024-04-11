@@ -52,14 +52,13 @@ class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
     def __init__(
         self,
         cfg,
-        classifier_cfg,
         dictionary,
         embed_tokens,
         no_encoder_attn=False,
         output_projection=None,
     ):
         self.cfg = cfg
-        self.classifier_cfg = classifier_cfg
+        
         super().__init__(dictionary)
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
@@ -120,7 +119,7 @@ class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
         self.layers.extend(
             [
                 self.build_decoder_layer(cfg, no_encoder_attn)
-                for _ in range(classifier_cfg.classifier_decoder_layers)
+                for _ in range(cfg.decoder.classifier_layers)
             ]
         )
         self.num_layers = len(self.layers)
@@ -139,14 +138,14 @@ class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
         self.adaptive_softmax = None
         self.output_projection = output_projection
         if self.output_projection is None:
-            self.build_output_projection(cfg, classifier_cfg,dictionary, embed_tokens)
+            self.build_output_projection(cfg,dictionary, embed_tokens)
 
     
-    def build_output_projection(self,  transformer_cfg, classifier_cfg, dictionary, embed_tokens):
+    def build_output_projection(self,  cfg, dictionary, embed_tokens):
     
         self.output_projection= torch.nn.Linear(
             embed_tokens.embedding_dim,
-            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*2 , bias=False
+            cfg.options_each_layer*(cfg.encoder.layers+cfg.decoder.layers)*2 , bias=False
         )
         # if cfg.adaptive_softmax_cutoff is not None:
         #     self.adaptive_softmax = AdaptiveSoftmax(
@@ -382,8 +381,9 @@ class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
         """Project features to the vocabulary size."""
         batch_size=features.size(0)
         # print("features---",features.shape)
-        features=features[:, -1, :]
-        return self.output_projection(features).view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps,2 )
+        features=features[:, 0, :]
+        #  cfg.options_each_layer*(cfg.encoder.layers+cfg.decoder.layers)*2
+        return self.output_projection(features).view(batch_size,self.cfg.options_each_layer,(self.cfg.encoder.layers+self.cfg.decoder.layers),2 )
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""

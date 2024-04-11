@@ -190,12 +190,12 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
 
 
 class TransformerStepsClassifier(TransformerStepsClassifierBase):
-    def __init__(self, cfg,classifier_cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
-        transformer_cfg=cfg
-        self.classifier_cfg=classifier_cfg
-        encoder=TransformerEncoderBase(transformer_cfg,classifier_cfg,encoder_dictionary,encoder_embed_tokens)
+    def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
+ 
+      
+        encoder=TransformerEncoderBase(cfg,encoder_dictionary,encoder_embed_tokens)
         # output_projection =self.build_output_projection(transformer_cfg, classifier_cfg, decoder_dictionary)
-        decoder=TransformerDecoderBase(transformer_cfg,classifier_cfg,decoder_dictionary,decoder_embed_tokens)
+        decoder=TransformerDecoderBase(cfg,decoder_dictionary,decoder_embed_tokens)
         super().__init__(cfg, encoder, decoder)
         # self.build_output_projection(transformer_cfg, classifier_cfg, decoder_dictionary, decoder_embed_tokens)
         
@@ -211,13 +211,13 @@ class TransformerStepsClassifier(TransformerStepsClassifierBase):
     # def forward(self,*args, **kwargs):
     #     x,_=super().forward(*args, **kwargs)
     #     return self.output_layer(x)
-class TransformerEncoderStepsClassifier(TransformerStepsClassifier):
-    def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
-        super().__init__(cfg, cfg.encoder,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens)
-class TransformerDecoderStepsClassifier(TransformerStepsClassifier):
-    def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
-        super().__init__(cfg, cfg.decoder,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens)
-        self.encoder.embed_positions=None
+# class TransformerEncoderStepsClassifier(TransformerStepsClassifier):
+#     def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
+#         super().__init__(cfg, cfg.encoder,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens)
+# class TransformerDecoderStepsClassifier(TransformerStepsClassifier):
+#     def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
+#         super().__init__(cfg, cfg.decoder,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens)
+#         self.encoder.embed_positions=None
         
     # def forward(
     #     self,

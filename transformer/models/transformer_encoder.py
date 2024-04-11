@@ -27,7 +27,6 @@ from fairseq.modules import (
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-from ..models.transformer_steps_classifier import TransformerEncoderStepsClassifier
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -386,40 +385,40 @@ class TransformerEncoderBase(FairseqEncoder):
         return state_dict
 
 
-class TransformerEncoder(TransformerEncoderBase):
-    def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
-        #self.args = args
-        super().__init__(
-            cfg,
-            dictionary,
-            embed_tokens,
-            return_fc=return_fc,
-        )
-        self.next_steps_classifier =torch.nn.Module()
+# class TransformerEncoder(TransformerEncoderBase):
+#     def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
+#         #self.args = args
+#         super().__init__(
+#             cfg,
+#             dictionary,
+#             embed_tokens,
+#             return_fc=return_fc,
+#         )
+#         self.next_steps_classifier =torch.nn.Module()
 
         
 
-    def forward(
-        self,
-        prev_output_tokens,
-        src_tokens,
-        src_lengths: Optional[torch.Tensor] = None,
-        return_all_hiddens: bool = False,
-        token_embeddings: Optional[torch.Tensor] = None,
-    ):
-        # print("encoder forward")
-        next_steps,_=self.next_steps_classifier(src_tokens.detach(),src_lengths,prev_output_tokens)
-        # print("encoder next steps",next_steps.shape)
-        #next_steps=NextSteps(next_steps)
-        # print("en input",src_tokens.shape)
-        # print("en next_steps",next_steps.get_indices().shape)
-        return super().forward(
-            src_tokens=src_tokens,
-            src_lengths=src_lengths,
-            return_all_hiddens=return_all_hiddens,
-            token_embeddings=token_embeddings,
-            next_steps=next_steps
-        )
+#     def forward(
+#         self,
+#         prev_output_tokens,
+#         src_tokens,
+#         src_lengths: Optional[torch.Tensor] = None,
+#         return_all_hiddens: bool = False,
+#         token_embeddings: Optional[torch.Tensor] = None,
+#     ):
+#         # print("encoder forward")
+#         next_steps,_=self.next_steps_classifier(src_tokens.detach(),src_lengths,prev_output_tokens)
+#         # print("encoder next steps",next_steps.shape)
+#         #next_steps=NextSteps(next_steps)
+#         # print("en input",src_tokens.shape)
+#         # print("en next_steps",next_steps.get_indices().shape)
+#         return super().forward(
+#             src_tokens=src_tokens,
+#             src_lengths=src_lengths,
+#             return_all_hiddens=return_all_hiddens,
+#             token_embeddings=token_embeddings,
+#             next_steps=next_steps
+#         )
         
 # class TransformerEncoderSection(nn.Module):
 #     def __init__(self, args, dictionary, embed_tokens, return_fc=False):
