@@ -260,7 +260,7 @@ class TransformerStepsClassifierEncoderBase(FairseqEncoder):
         #     .reshape(-1, 1)
         #     .contiguous()
         # )
-        # x.register_hook(lambda grad: print("classifier encoder grad",grad.sum()))
+        x.register_hook(lambda grad: print("classifier encoder grad",grad.sum()))
         return {
             "encoder_out": [x],  # T x B x C
             "encoder_padding_mask": [encoder_padding_mask],  # B x T
