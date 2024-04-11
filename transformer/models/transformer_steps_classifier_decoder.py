@@ -374,7 +374,7 @@ class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
 
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
-        x.register_hook(lambda grad: print("classifier decoder grad",grad.sum()))
+        # x.register_hook(lambda grad: print("classifier decoder grad",grad.sum()))
         return x, {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
