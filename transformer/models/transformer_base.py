@@ -18,7 +18,7 @@ from fairseq.models import FairseqEncoderDecoderModel
 from ..models.transformer_config import TransformerConfig
 from ..models.transformer_decoder import TransformerDecoder
 from ..models.transformer_encoder import TransformerEncoder
-
+from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier, TransformerEncoderStepsClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,8 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
+        encoder.next_steps_classifier=TransformerEncoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
+        decoder.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
     def set_last_loss(self, loss):
         #loss=loss.detach()
         self.encoder.set_last_loss(loss)
@@ -160,9 +162,11 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         Copied from the base class, but without ``**kwargs``,
         which are not supported by TorchScript.
         """
+        
         encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens
+            prev_output_tokens,src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens
         )
+        # print("encoder_out",encoder_out["encoder_out"][0].shape)
         decoder_out = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -171,6 +175,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
+            
         )
         return decoder_out
 

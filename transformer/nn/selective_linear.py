@@ -30,6 +30,7 @@ class SelectiveLinear(Module):
             self.register_parameter('bias', None)
         self.reset_parameters()
         self.batch_index=batch_index
+        self.activation=torch.nn.Identity()
        
         
     
@@ -41,8 +42,8 @@ class SelectiveLinear(Module):
             init.uniform_(self.bias, -bound, bound)
             
 
-    def forward(self, x, selection_logits, temperature=1.0):
-        
+    def forward(self, x, selection_logits, temperature=0.5):
+        # return  torch.nn.functional.linear(x, self.weights[0], self.bias[0])
         if self.batch_index!=0:
             x=x.transpose(0,self.batch_index)
         
@@ -51,23 +52,32 @@ class SelectiveLinear(Module):
         # Compute selection probabilities from logits using softmax
         # selection_probs = F.softmax(selection_logits / temperature, dim=-1)
         # print("Selection probs shape:", selection_probs.shape)
+        # print("selection_logits",selection_logits.shape,self.weights.shape,self.bias.shape,x.shape)
         selection_probs=selection_logits
-        transformed = torch.einsum('nij,baj->bani', self.weights, x)
+        selection_probs = F.softmax(selection_probs / temperature, dim=-1)
+        # transformed = torch.einsum('nij,baj->bani', self.weights, x)
+        weighted_weights = torch.einsum('nij,bn->bij', self.weights, selection_probs)
+        weighted_weights=self.activation(weighted_weights)
+        # print("weighted_weights",weighted_weights.shape)
+        # transformed=self.activation(transformed)
         # transformed=self.activation(transformed)
 
         # Compute the weighted sum of biases using the selection probabilities
-        weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+        
         # weighted_biases = self.activation(weighted_biases)
         # Sum the outputs using the selection probabilities to get the final output
-        final_output = torch.einsum('bani,bn->bai', transformed, selection_probs)
-
+        # final_output = torch.einsum('bni,bn->bai', transformed, x)
+        final_output = torch.einsum('bij,bnj->bni', weighted_weights, x)
+        
+        weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+        weighted_biases=self.activation(weighted_biases)
         # Add the weighted biases to the final output
         final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
 
         if self.batch_index!=0:
             final_output=final_output.transpose(0,self.batch_index)
        
-            
+        # final_output.register_hook(lambda grad: print("linear grad",grad.sum()))
             
         return final_output
 

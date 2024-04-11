@@ -3,547 +3,243 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import math
-from typing import Dict, List, Mapping, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
 from torch import Tensor
-from ..nn.transformer_layer import TransformerEncoderLayerBase
-from ..nn.confidence_loss import confidence_loss
-from fairseq import utils
-from fairseq.distributed import fsdp_wrap
-from fairseq.models import FairseqEncoder
-from fairseq.models.transformer import TransformerConfig
-from fairseq.modules import (
-    FairseqDropout,
-    LayerDropModuleList,
-    LayerNorm,
-    PositionalEmbedding,
-    SinusoidalPositionalEmbedding,
-    #transformer_layer,
-)
-from fairseq.modules.checkpoint_activations import checkpoint_wrapper
-from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
 import logging
-logger = logging.getLogger(__name__)
-# rewrite name for backward compatibility in `make_generation_fast_`
-def module_name_fordropout(module_name: str) -> str:
-    if module_name == "TransformerEncoderBase":
-        return "TransformerEncoder"
-    else:
-        return module_name
 
-# class NextSteps:
-#     def __init__(self,tensor):
-#         self.tensor = tensor
-       
-#         self._indices =None
-     
-      
-#         self._softmax =None
-     
-       
-        
-#         self._probability =None
-      
-#         self.mapped_indices=None
-#         self._confidence=None
-#     def get_indices(self):
-#         if self._indices is None:
-#             self._indices = torch.argmax(self.tensor,dim=1)
-#         return self._indices
-#     def get_mapped_indices(self):
-#         return self.mapped_indices
-#     def get_softmax(self):
-#         #print(torch.is_grad_enabled())
-#         if self._softmax is None:
-#             #print(self.tensor.grad_fn,"tensor grad_fn",torch.nn.functional.softmax(self.tensor, dim=1).grad_fn)
-#             softmax_result_immediate = torch.nn.functional.softmax(self.tensor, dim=1)
-#             #print(f"Immediate softmax grad_fn: {softmax_result_immediate.grad_fn}")
-#             self._softmax = torch.nn.functional.softmax(self.tensor, dim=1)
-#            # print(self._softmax.grad_fn,"softmax grad_fn2")
-#         return self._softmax
-   
-#     def get_probability(self):
-#         if self._probability is None:
-#             expanded_indices = self.get_indices().unsqueeze(-1)
-#             self._probability = torch. gather(self.get_softmax(), 1,expanded_indices).squeeze(-1)
-#             # print(self._probability.grad_fn,"grad_fn")
-#             # print(self.tensor.grad_fn,"grad_fn2")
-#             # print(self._softmax.grad_fn,"grad_fn3")
-#         return self._probability
-   
-#     def get_confidence(self):
-#         if self._confidence is None:
-#             self._confidence=torch.sum(self.get_probability(),dim=1)
-#         #print(self._confidence.grad_fn,"conf")
-        return self._confidence
-class TransformerStepsClassifierBase(FairseqEncoder):
+from fairseq import utils
+from fairseq.dataclass.utils import gen_parser_from_dataclass
+from fairseq.distributed import fsdp_wrap
+from fairseq.models import FairseqEncoderDecoderModel
+from ..models.transformer_steps_classifier_decoder import TransformerStepsClassifierDecoderBase as TransformerDecoderBase
+from ..models.transformer_steps_classifier_encoder import TransformerStepsClassifierEncoderBase as TransformerEncoderBase
+
+logger = logging.getLogger(__name__)
+
+
+class TransformerStepsClassifierBase(FairseqEncoderDecoderModel):
     """
-    Transformer encoder consisting of *classifier_cfg.layers* layers. Each layer
-    is a :class:`TransformerEncoderLayer`.
+    Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
+    <https://arxiv.org/abs/1706.03762>`_.
 
     Args:
-        args (argparse.Namespace): parsed command-line arguments
-        dictionary (~fairseq.data.Dictionary): encoding dictionary
-        embed_tokens (torch.nn.Embedding): input embedding
+        encoder (TransformerEncoder): the encoder
+        decoder (TransformerDecoder): the decoder
+
+    The Transformer model provides the following named architectures and
+    command-line arguments:
+
+    .. argparse::
+        :ref: fairseq.models.transformer_parser
+        :prog:
     """
-    def set_requires_grad(self,requires_grad):
-        self.__requires_grad=requires_grad
-    def set_epoch(self,epoch):
-        if self.classifier_cfg.classifier_learn_epoch>=epoch:
-            self.set_requires_grad(True)
-    def set_last_loss(self,loss):
-        #print("set_last_loss",loss)
-        if self.__requires_grad and torch.enable_grad():
-            
-            confidence_loss(self.last_confidence,loss).mean().backward()
-            self.last_confidence=None
-    def __init__(self, transformer_cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
-        self.transformer_cfg = transformer_cfg
-        self.classifier_cfg=classifier_cfg
-        super().__init__(dictionary)
-        
-        self.register_buffer("version", torch.Tensor([3]))
 
-        self.dropout_module = FairseqDropout(
-            transformer_cfg.dropout, module_name=module_name_fordropout(self.__class__.__name__)
-        )
-        self.encoder_layerdrop = classifier_cfg.layerdrop
-        self.return_fc = return_fc
+    def __init__(self, cfg, encoder, decoder):
+        super().__init__(encoder, decoder)
+        self.cfg = cfg
+        self.supports_align_args = True
 
-        embed_dim = embed_tokens.embedding_dim
-        self.padding_idx = embed_tokens.padding_idx
-       
 
-        self.embed_tokens = embed_tokens
 
-        self.embed_scale = 1.0 if transformer_cfg.no_scale_embedding else math.sqrt(embed_dim)
+    @classmethod
+    def build_model(cls, cfg, task):
+        """Build a new model instance."""
 
-        self.embed_positions = (
-            PositionalEmbedding(
-                transformer_cfg.max_source_positions,
-                embed_dim,
-                self.padding_idx,
-                learned=classifier_cfg.learned_pos,
+        # --  TODO T96535332
+        #  bug caused by interaction between OmegaConf II and argparsing
+        cfg.decoder.input_dim = int(cfg.decoder.input_dim)
+        cfg.decoder.output_dim = int(cfg.decoder.output_dim)
+        # --
+
+        if cfg.encoder.layers_to_keep:
+            cfg.encoder.layers = len(cfg.encoder.layers_to_keep.split(","))
+        if cfg.decoder.layers_to_keep:
+            cfg.decoder.layers = len(cfg.decoder.layers_to_keep.split(","))
+
+        src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
+
+        if cfg.share_all_embeddings:
+            if src_dict != tgt_dict:
+                raise ValueError("--share-all-embeddings requires a joined dictionary")
+            if cfg.encoder.embed_dim != cfg.decoder.embed_dim:
+                raise ValueError(
+                    "--share-all-embeddings requires --encoder-embed-dim to match --decoder-embed-dim"
+                )
+            if cfg.decoder.embed_path and (
+                cfg.decoder.embed_path != cfg.encoder.embed_path
+            ):
+                raise ValueError(
+                    "--share-all-embeddings not compatible with --decoder-embed-path"
+                )
+            encoder_embed_tokens = cls.build_embedding(
+                cfg, src_dict, cfg.encoder.embed_dim, cfg.encoder.embed_path
             )
-            if not transformer_cfg.no_token_positional_embeddings
-            else None
-        )
-        if transformer_cfg.layernorm_embedding:
-            self.layernorm_embedding = LayerNorm(embed_dim, export=transformer_cfg.export)
-        else:
-            self.layernorm_embedding = None
-
-        if not transformer_cfg.adaptive_input and transformer_cfg.quant_noise.pq > 0:
-            self.quant_noise = apply_quant_noise_(
-                nn.Linear(embed_dim, embed_dim, bias=False),
-                transformer_cfg.quant_noise.pq,
-                transformer_cfg.quant_noise.pq_block_size,
+            decoder_embed_tokens = encoder_embed_tokens
+            cfg.share_decoder_input_output_embed = True
+        elif cfg.merge_src_tgt_embed:
+            logger.info(f"source dict size: {len(src_dict)}")
+            logger.info(f"target dict size: {len(tgt_dict)}")
+            src_dict.update(tgt_dict)
+            task.src_dict = src_dict
+            task.tgt_dict = src_dict
+            logger.info(f"merged dict size: {len(src_dict)}")
+            encoder_embed_tokens = cls.build_embedding(
+                cfg, src_dict, cfg.encoder.embed_dim
             )
+            decoder_embed_tokens = encoder_embed_tokens
+            cfg.share_decoder_input_output_embed = True
         else:
-            self.quant_noise = None
+            encoder_embed_tokens = cls.build_embedding(
+                cfg, src_dict, cfg.encoder.embed_dim, cfg.encoder.embed_path
+            )
+            decoder_embed_tokens = cls.build_embedding(
+                cfg, tgt_dict, cfg.decoder.embed_dim, cfg.decoder.embed_path
+            )
+        if cfg.offload_activations:
+            cfg.checkpoint_activations = True  # offloading implies checkpointing
+        encoder = cls.build_encoder(cfg, src_dict, encoder_embed_tokens)
+        decoder = cls.build_decoder(cfg, tgt_dict, decoder_embed_tokens)
+        return cls(cfg, encoder, decoder)
 
-        if self.encoder_layerdrop > 0.0:
-            self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
-        else:
-            self.layers = nn.ModuleList([])
-        self.layers.extend(
-            [self.build_encoder_layer(transformer_cfg) for i in range(classifier_cfg.classifier_layers)]
-        )
-        self.num_layers = len(self.layers)
+    @classmethod
+    def build_embedding(cls, cfg, dictionary, embed_dim, path=None):
+        num_embeddings = len(dictionary)
+        padding_idx = dictionary.pad()
 
-        if classifier_cfg.normalize_before:
-            self.layer_norm = LayerNorm(embed_dim, export=transformer_cfg.export)
-        else:
-            self.layer_norm = None
-        self.build_output_projection(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
-        # self.build_index_mapping(transformer_cfg, classifier_cfg, dictionary, embed_tokens)
-        self.set_requires_grad(False)
-    # def build_index_mapping(self,transformer_cfg, classifier_cfg, dictionary, embed_tokens):
-        
-        
-    #     total_new=0
-       
-    #     self.index_mapping=torch.nn.Parameter( torch.zeros(classifier_cfg.steps_classifier_classes,classifier_cfg.num_steps,dtype=torch.long),requires_grad=False)
-    #     #self.register_buffer("index_mapping", self.index_mapping)
-    #     def build_index(index,num_new,num_shared=0,index_shared=None):
-    #         nonlocal total_new
-    #         if index_shared is not None:
-    #             assert 0<=index_shared<index<classifier_cfg.num_steps
-    #         else:
-    #             assert 0<=index<classifier_cfg.num_steps
-    #         #assert num_new+num_shared==classifier_cfg.steps_classifier_classes
-            
-                
-    #         self. index_mapping[0:num_new,index]= torch.arange(total_new,total_new+num_new)
-    #         if num_shared>0:
-    #             self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
-    #         #self.index_mapping[num_new:num_new+num_shared,index]=self.index_mapping[0:num_shared,index_shared]
-    #         total_new+=num_new
-    #     def build_random_index(index,num_random,starts_at):
-    #         self.index_mapping[starts_at:starts_at+num_random,index]=torch.randperm(classifier_cfg.total_options)[:num_random]    
-        
-           
-    #     if classifier_cfg.sharing_method=="none":
-    #         for i in range(classifier_cfg.num_steps):
-    #             build_index(i,num_new=classifier_cfg.steps_classifier_classes)
-    #     if classifier_cfg.sharing_method=="cycle_rev":
-    #         assert classifier_cfg.num_steps%2==0
-    #         for i in range( classifier_cfg.num_steps//2):
-    #             build_index(i,num_new=classifier_cfg.steps_classifier_classes)
-    #         new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
-    #         for i in range(classifier_cfg.num_steps//2,classifier_cfg.num_steps):
-    #             build_index(i,num_new=new,num_shared=classifier_cfg.steps_classifier_shared_classes,index_shared=classifier_cfg.num_steps-i-1)
-    #     if classifier_cfg.sharing_method=="random":
-    #         new=classifier_cfg.steps_classifier_classes-classifier_cfg.steps_classifier_shared_classes
-    #         for i in range(classifier_cfg.num_steps):
-    #             build_index(i,num_new=new)
-    #         for i in range(classifier_cfg.num_steps):
-    #             build_random_index(i,  classifier_cfg.steps_classifier_shared_classes,new)
-    #     #print(classifier_cfg.total_options,total_new)
-    #     logger.info(f"Total options: {classifier_cfg.total_options}, Total new: {total_new}")
-    #     logger.info(f"Index mapping: {self.index_mapping}")
-    #     logger.info(f"total_new: {total_new}")
-    #     print("sharing method",classifier_cfg.sharing_method)
-    #     assert classifier_cfg.total_options==total_new
-            
-               
-          
-            
-        
-            
-    def build_output_projection(self,  transformer_cfg, classifier_cfg, dictionary, embed_tokens):
-    
-        self.output_projection =torch.nn.Linear(
-            embed_tokens.embedding_dim,
-            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*2 , bias=False
-        )
-    def build_encoder_layer(self, transformer_cfg):
-        layer = TransformerEncoderLayerBase(
-            transformer_cfg, return_fc=self.return_fc
-        )
-        checkpoint = transformer_cfg.checkpoint_activations
-        if checkpoint:
-            offload_to_cpu = transformer_cfg.offload_activations
-            layer = checkpoint_wrapper(layer, offload_to_cpu=offload_to_cpu)
-        # if we are checkpointing, enforce that FSDP always wraps the
-        # checkpointed layer, regardless of layer size
-        min_params_to_wrap = transformer_cfg.min_params_to_wrap if not checkpoint else 0
-        layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
-        return layer
-    def output_layer(self, features):
-        #print("features",features.shape)
-        
-        output= self.output_projection(features[0])
-        batch_size=output.size(0)
-        # output.register_hook(lambda grad: print(grad.sum()))
-     
-        return output.view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps,2 )
-    def forward_embedding(
-        self, src_tokens, token_embedding: Optional[torch.Tensor] = None
-    ):
-        # embed tokens and positions
-        if token_embedding is None:
-            token_embedding = self.embed_tokens(src_tokens)
-        x = embed = self.embed_scale * token_embedding
-        if self.embed_positions is not None:
-            x = embed + self.embed_positions(src_tokens)
-        if self.layernorm_embedding is not None:
-            x = self.layernorm_embedding(x)
-        x = self.dropout_module(x)
-        if self.quant_noise is not None:
-            x = self.quant_noise(x)
-        return x, embed
+        emb = Embedding(num_embeddings, embed_dim, padding_idx)
+        # if provided, load from preloaded dictionaries
+        if path:
+            embed_dict = utils.parse_embedding(path)
+            utils.load_embedding(embed_dict, dictionary, emb)
+        return emb
 
+    @classmethod
+    def build_encoder(cls, cfg, src_dict, embed_tokens):
+        return TransformerEncoderBase(cfg, src_dict, embed_tokens)
+
+    @classmethod
+    def build_decoder(cls, cfg, tgt_dict, embed_tokens):
+        return TransformerDecoderBase(
+            cfg,
+            tgt_dict,
+            embed_tokens,
+            no_encoder_attn=cfg.no_cross_attention,
+        )
+
+    # TorchScript doesn't support optional arguments with variable length (**kwargs).
+    # Current workaround is to add union of all arguments in child classes.
     def forward(
         self,
         src_tokens,
-        src_lengths: Optional[torch.Tensor] = None,
-        return_all_hiddens: bool = False,
-        token_embeddings: Optional[torch.Tensor] = None,
+        
+        src_lengths,
+        prev_output_tokens,
+        return_all_hiddens: bool = True,
+        features_only: bool = False,
+        alignment_layer: Optional[int] = None,
+        alignment_heads: Optional[int] = None,
+        token_embeddings: Optional[Tensor] = None,
     ):
         """
-        Args:
-            src_tokens (LongTensor): tokens in the source language of shape
-                `(batch, src_len)`
-            src_lengths (torch.LongTensor): lengths of each source sentence of
-                shape `(batch)`
-            return_all_hiddens (bool, optional): also return all of the
-                intermediate hidden states (default: False).
-            token_embeddings (torch.Tensor, optional): precomputed embeddings
-                default `None` will recompute embeddings
+        Run the forward pass for an encoder-decoder model.
 
-        Returns:
-            dict:
-                - **encoder_out** (Tensor): the last encoder layer's output of
-                  shape `(src_len, batch, embed_dim)`
-                - **encoder_padding_mask** (ByteTensor): the positions of
-                  padding elements of shape `(batch, src_len)`
-                - **encoder_embedding** (Tensor): the (scaled) embedding lookup
-                  of shape `(batch, src_len, embed_dim)`
-                - **encoder_states** (List[Tensor]): all intermediate
-                  hidden states of shape `(src_len, batch, embed_dim)`.
-                  Only populated if *return_all_hiddens* is True.
+        Copied from the base class, but without ``**kwargs``,
+        which are not supported by TorchScript.
         """
-        #src_tokens=src_tokens.permute(1,0,2)
-        # if token_embeddings is not None:
-        #     token_embeddings=token_embeddings.permute(1,0,2)
-        return self.forward_scriptable(
-            src_tokens, src_lengths, return_all_hiddens, token_embeddings
+        
+        encoder_out = self.encoder(
+            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens, token_embeddings=token_embeddings
         )
+        # print("encoder_out",encoder_out)
+        # print("steps encoder_out",encoder_out["encoder_out"][0].shape)
+        decoder_out = self.decoder(
+            
+            prev_output_tokens,
+            encoder_out=encoder_out,
+            features_only=features_only,
+            alignment_layer=alignment_layer,
+            alignment_heads=alignment_heads,
+            src_lengths=src_lengths,
+            return_all_hiddens=return_all_hiddens,
+        )
+        return decoder_out
 
-    # TorchScript doesn't support super() method so that the scriptable Subclass
-    # can't access the base class model in Torchscript.
-    # Current workaround is to add a helper function with different name and
-    # call the helper function from scriptable Subclass.
-    def forward_scriptable(
+    # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
+    # I rewrite the get_normalized_probs from Base Class to call the
+    # helper function in the Base Class.
+    @torch.jit.export
+    def get_normalized_probs(
         self,
-        src_tokens,
-        src_lengths: Optional[torch.Tensor] = None,
-        return_all_hiddens: bool = False,
-        token_embeddings: Optional[torch.Tensor] = None,
+        net_output: Tuple[Tensor, Optional[Dict[str, List[Optional[Tensor]]]]],
+        log_probs: bool,
+        sample: Optional[Dict[str, Tensor]] = None,
     ):
-        """
-        Args:
-            src_tokens (LongTensor): tokens in the source language of shape
-                `(batch, src_len)`
-            src_lengths (torch.LongTensor): lengths of each source sentence of
-                shape `(batch)`
-            return_all_hiddens (bool, optional): also return all of the
-                intermediate hidden states (default: False).
-            token_embeddings (torch.Tensor, optional): precomputed embeddings
-                default `None` will recompute embeddings
+        """Get normalized probabilities (or log probs) from a net's output."""
+        return self.get_normalized_probs_scriptable(net_output, log_probs, sample)
 
-        Returns:
-            dict:
-                - **encoder_out** (Tensor): the last encoder layer's output of
-                  shape `(src_len, batch, embed_dim)`
-                - **encoder_padding_mask** (ByteTensor): the positions of
-                  padding elements of shape `(batch, src_len)`
-                - **encoder_embedding** (Tensor): the (scaled) embedding lookup
-                  of shape `(batch, src_len, embed_dim)`
-                - **encoder_states** (List[Tensor]): all intermediate
-                  hidden states of shape `(src_len, batch, embed_dim)`.
-                  Only populated if *return_all_hiddens* is True.
-        """
-        # compute padding mask
-        encoder_padding_mask = src_tokens.eq(self.padding_idx)
-        has_pads = (
-            torch.tensor(src_tokens.device.type == "xla") or encoder_padding_mask.any()
-        )
-        # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
-        if torch.jit.is_scripting():
-            has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
 
-        x, encoder_embedding = self.forward_embedding(src_tokens, token_embeddings)
+def Embedding(num_embeddings, embedding_dim, padding_idx):
+    m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
+    nn.init.normal_(m.weight, mean=0, std=embedding_dim**-0.5)
+    nn.init.constant_(m.weight[padding_idx], 0)
+    return m
 
-        # account for padding while computing the representation
-        x = x * (
-            1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
-        )
 
-        # B x T x C -> T x B x C
-        x = x.transpose(0, 1)
-
-        encoder_states = []
-        fc_results = []
-
-        if return_all_hiddens:
-            encoder_states.append(x)
-
-        # encoder layers
-        for layer in self.layers:
-            lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None
-            )
-
-            if isinstance(lr, tuple) and len(lr) == 2:
-                x, fc_result = lr
-            else:
-                x = lr
-                fc_result = None
-
-            if return_all_hiddens and not torch.jit.is_scripting():
-                assert encoder_states is not None
-                encoder_states.append(x)
-                fc_results.append(fc_result)
-
-        if self.layer_norm is not None:
-            x = self.layer_norm(x)
-
-        # The Pytorch Mobile lite interpreter does not supports returning NamedTuple in
-        # `forward` so we use a dictionary instead.
-        # TorchScript does not support mixed values so the values are all lists.
-        # The empty list is equivalent to None.
-        src_lengths = (
-            src_tokens.ne(self.padding_idx)
-            .sum(dim=1, dtype=torch.int32)
-            .reshape(-1, 1)
-            .contiguous()
-        )
-        next_steps=self.output_layer(x)
-       
-        #print("mapped index",next_steps.mapped_indices)
-        return {
-            "next_steps":[next_steps],
-            "encoder_out": [x],  # T x B x C
-            "encoder_padding_mask": [encoder_padding_mask],  # B x T
-            "encoder_embedding": [encoder_embedding],  # B x T x C
-            "encoder_states": encoder_states,  # List[T x B x C]
-            "fc_results": fc_results,  # List[T x B x C]
-            "src_tokens": [],
-            "src_lengths": [src_lengths],
-        }
-
-    def max_positions(self):
-        """Maximum input length supported by the encoder."""
-        if self.embed_positions is None:
-            return self.max_source_positions
-        return min(self.max_source_positions, self.embed_positions.max_positions)
-
-    def upgrade_state_dict_named(self, state_dict, name):
-        """Upgrade a (possibly old) state dict for new versions of fairseq."""
-        for i in range(self.num_layers):
-            # update layer norms
-            self.layers[i].upgrade_state_dict_named(
-                state_dict, "{}.layers.{}".format(name, i)
-            )
+class TransformerStepsClassifier(TransformerStepsClassifierBase):
+    def __init__(self, cfg,classifier_cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
+        transformer_cfg=cfg
+        self.classifier_cfg=classifier_cfg
+        encoder=TransformerEncoderBase(transformer_cfg,classifier_cfg,encoder_dictionary,encoder_embed_tokens)
+        # output_projection =self.build_output_projection(transformer_cfg, classifier_cfg, decoder_dictionary)
+        decoder=TransformerDecoderBase(transformer_cfg,classifier_cfg,decoder_dictionary,decoder_embed_tokens)
+        super().__init__(cfg, encoder, decoder)
+        # self.build_output_projection(transformer_cfg, classifier_cfg, decoder_dictionary, decoder_embed_tokens)
+        
+   
+    # def output_layer(self, features):
+    #     #print("features",features.shape)
+    #     print(features.shape)
+    #     # output= self.output_projection(features[0])
+    #     batch_size=features.size(0)
+    #     features.register_hook(lambda grad: print("classifier",grad.sum()))
      
-        version_key = "{}.version".format(name)
-        if utils.item(state_dict.get(version_key, torch.Tensor([1]))[0]) < 2:
-            # earlier checkpoints did not normalize after the stack of layers
-            self.layer_norm = None
-            self.normalize = False
-            state_dict[version_key] = torch.Tensor([1])
-        return state_dict
-    
-    # def load_state_dict(self, state_dict: Mapping[str, Any], strict: bool = True):
-    #     return super().load_state_dict(state_dict, strict)
-class TransformerEncoderStepsClassifier(TransformerStepsClassifierBase):
-    def __init__(self, transformer_cfg, dictionary, embed_tokens, return_fc=False):
-      
-        #print(transformer_cfg.encoder_steps_classifier is None)
-        super().__init__(
-           transformer_cfg,
-           transformer_cfg.encoder,
-            dictionary,
-            embed_tokens,
-            return_fc=return_fc,
-        )
-
-class TransformerDecoderStepsClassifier(TransformerStepsClassifierBase):
-    def __init__(self, transformer_cfg, dictionary, embed_tokens, return_fc=False):
-       
-        super().__init__(
-           transformer_cfg,
-           transformer_cfg.decoder,
-            dictionary,
-            embed_tokens,
-            return_fc=return_fc,
-        )
+    #     return features.
+    # def forward(self,*args, **kwargs):
+    #     x,_=super().forward(*args, **kwargs)
+    #     return self.output_layer(x)
+class TransformerEncoderStepsClassifier(TransformerStepsClassifier):
+    def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
+        super().__init__(cfg, cfg.encoder,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens)
+class TransformerDecoderStepsClassifier(TransformerStepsClassifier):
+    def __init__(self, cfg,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens):
+        super().__init__(cfg, cfg.decoder,encoder_dictionary,encoder_embed_tokens,decoder_dictionary,decoder_embed_tokens)
+        self.encoder.embed_positions=None
         
-    # def forward_scriptable(
+    # def forward(
     #     self,
-    #     src_tokens=None,
-    #     src_lengths: Optional[torch.Tensor] = None,
-    #     return_all_hiddens: bool = False,
-    #     token_embeddings: Optional[torch.Tensor] = None,
-    # ):
-    #     """
-    #     Args:
-    #         src_tokens (LongTensor): tokens in the source language of shape
-    #             `(batch, src_len)`
-    #         src_lengths (torch.LongTensor): lengths of each source sentence of
-    #             shape `(batch)`
-    #         return_all_hiddens (bool, optional): also return all of the
-    #             intermediate hidden states (default: False).
-    #         token_embeddings (torch.Tensor, optional): precomputed embeddings
-    #             default `None` will recompute embeddings
-
-    #     Returns:
-    #         dict:
-    #             - **encoder_out** (Tensor): the last encoder layer's output of
-    #               shape `(src_len, batch, embed_dim)`
-    #             - **encoder_padding_mask** (ByteTensor): the positions of
-    #               padding elements of shape `(batch, src_len)`
-    #             - **encoder_embedding** (Tensor): the (scaled) embedding lookup
-    #               of shape `(batch, src_len, embed_dim)`
-    #             - **encoder_states** (List[Tensor]): all intermediate
-    #               hidden states of shape `(src_len, batch, embed_dim)`.
-    #               Only populated if *return_all_hiddens* is True.
-    #     """
-    #     # compute padding mask
+    #     src_tokens,
         
-      
-
-    #     # encoder_padding_mask = src_tokens.eq(self.padding_idx)
-    #     # has_pads = (
-    #     #     torch.tensor(src_tokens.device.type == "xla") or encoder_padding_mask.any()
-    #     # )
-    #     # # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
-    #     # if torch.jit.is_scripting():
-    #     #     has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
-
-    #     # x, encoder_embedding = self.forward_embedding(src_tokens, token_embeddings)
-
-    #     # # account for padding while computing the representation
-    #     # x = x * (
-    #     #     1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
-    #     # )
-
-    #     # # B x T x C -> T x B x C
-    #     # x = x.transpose(0, 1)
-    #     x=token_embeddings
-    #     print(x.shape)
-
-    #     encoder_states = []
-    #     fc_results = []
-
-    #     if return_all_hiddens:
-    #         encoder_states.append(x)
-    #     #encoder_padding_mask=torch.zeros(x.size(0),x.size(1)).to(x.device)
-    #     # encoder layers
-    #     for layer in self.layers:
-    #         lr = layer(
-    #             #x, encoder_padding_mask=encoder_padding_mask if has_pads else None
-    #             x, encoder_padding_mask=None
-    #         )
-
-    #         if isinstance(lr, tuple) and len(lr) == 2:
-    #             x, fc_result = lr
-    #         else:
-    #             x = lr
-    #             fc_result = None
-
-    #         if return_all_hiddens and not torch.jit.is_scripting():
-    #             assert encoder_states is not None
-    #             encoder_states.append(x)
-    #             fc_results.append(fc_result)
-
-    #     if self.layer_norm is not None:
-    #         x = self.layer_norm(x)
-
-    #     # The Pytorch Mobile lite interpreter does not supports returning NamedTuple in
-    #     # `forward` so we use a dictionary instead.
-    #     # TorchScript does not support mixed values so the values are all lists.
-    #     # The empty list is equivalent to None.
-    #     # src_lengths = (
-    #     #     src_tokens.ne(self.padding_idx)
-    #     #     .sum(dim=1, dtype=torch.int32)
-    #     #     .reshape(-1, 1)
-    #     #     .contiguous()
-    #     # )
-    #     next_steps=self.output_layer(x)
-    #     return {
-    #         "next_steps":[next_steps],
-    #         "encoder_out": [x],  # T x B x C
-    #         # "encoder_padding_mask": [encoder_padding_mask],  # B x T
-    #         # "encoder_embedding": [encoder_embedding],  # B x T x C
-    #         "encoder_states": encoder_states,  # List[T x B x C]
-    #         "fc_results": fc_results,  # List[T x B x C]
-    #         "src_tokens": [],
-    #         #"src_lengths": [src_lengths],
-    #     }
+    #     src_lengths,
+    #     prev_output_tokens,
+    #     return_all_hiddens: bool = True,
+    #     features_only: bool = False,
+    #     alignment_layer: Optional[int] = None,
+    #     alignment_heads: Optional[int] = None,
+    #     token_embeddings: Optional[Tensor] = None,
+    # ):
+    #     print(src_tokens.shape,prev_output_tokens.shape,src_lengths.shape)
+    #     src_tokens=src_tokens.transpose(0,1)
+    #     return super().forward(
+    #         src_tokens,
+    #         src_lengths,
+    #         prev_output_tokens,
+    #         return_all_hiddens=return_all_hiddens,
+    #         features_only=features_only,
+    #         alignment_layer=alignment_layer,
+    #         alignment_heads=alignment_heads,
+    #         token_embeddings=token_embeddings
+    #     )

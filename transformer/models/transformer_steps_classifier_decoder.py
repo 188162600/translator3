@@ -13,14 +13,7 @@ from torch import Tensor
 from fairseq import utils
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqIncrementalDecoder
-
-from ..nn.selective_linear import SelectiveLinear
-from ..nn import selective_transformer_layer
-from ..nn.confidence_loss import confidence_loss
-from ..models.transformer_steps_classifier import TransformerDecoderStepsClassifier
-from ..models.transformer_config import TransformerConfig
-
-# from fairseq.models.transformer import TransformerConfig
+from fairseq.models.transformer import TransformerConfig
 from fairseq.modules import (
     AdaptiveSoftmax,
     BaseLayer,
@@ -29,10 +22,10 @@ from fairseq.modules import (
     LayerNorm,
     PositionalEmbedding,
     SinusoidalPositionalEmbedding,
-    #transformer_layer,
+    transformer_layer,
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
-from ..nn.quant_noise import quant_noise as apply_quant_noise_
+from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
 
 # rewrite name for backward compatibility in `make_generation_fast_`
@@ -43,7 +36,7 @@ def module_name_fordropout(module_name: str) -> str:
         return module_name
 
 
-class TransformerDecoderBase(FairseqIncrementalDecoder):
+class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
     """
     Transformer decoder consisting of *cfg.decoder.layers* layers. Each layer
     is a :class:`TransformerDecoderLayer`.
@@ -55,24 +48,18 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
             (default: False).
     """
-    def set_last_loss(self, loss):
-        self.next_steps_classifier.set_last_loss(loss)
-    # def set_classifier_requires_grad(self,requires_grad):
-    #     self.next_steps_classifier_requires_grad=requires_grad
-    # def set_epoch(self, epoch):
-    #     if self.cfg.decoder.classifier_learn_epoch>=epoch:
-    #         self.set_requires_grad(True)
-    #     if hasattr(super(),"set_epoch"):
-    #         super().set_epoch(epoch)
+
     def __init__(
         self,
         cfg,
+        classifier_cfg,
         dictionary,
         embed_tokens,
         no_encoder_attn=False,
         output_projection=None,
     ):
         self.cfg = cfg
+        self.classifier_cfg = classifier_cfg
         super().__init__(dictionary)
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
@@ -82,7 +69,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         )
         self.decoder_layerdrop = cfg.decoder.layerdrop
         self.share_input_output_embed = cfg.share_decoder_input_output_embed
-
+        
         input_embed_dim = embed_tokens.embedding_dim
         embed_dim = cfg.decoder.embed_dim
         self.embed_dim = embed_dim
@@ -97,7 +84,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         if not cfg.adaptive_input and cfg.quant_noise.pq > 0:
             self.quant_noise = apply_quant_noise_(
-                 SelectiveLinear(cfg.num_options,embed_dim, embed_dim, bias=False),
+                nn.Linear(embed_dim, embed_dim, bias=False),
                 cfg.quant_noise.pq,
                 cfg.quant_noise.pq_block_size,
             )
@@ -105,7 +92,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.quant_noise = None
 
         self.project_in_dim = (
-            SelectiveLinear(cfg.num_options,input_embed_dim, embed_dim, bias=False)
+            Linear(input_embed_dim, embed_dim, bias=False)
             if embed_dim != input_embed_dim
             else None
         )
@@ -130,11 +117,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layers = LayerDropModuleList(p=self.decoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        #shared_layer=self.build_decoder_layer(cfg, no_encoder_attn)
         self.layers.extend(
             [
                 self.build_decoder_layer(cfg, no_encoder_attn)
-                for _ in range(cfg.decoder.layers)
+                for _ in range(classifier_cfg.classifier_decoder_layers)
             ]
         )
         self.num_layers = len(self.layers)
@@ -145,7 +131,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layer_norm = None
 
         self.project_out_dim = (
-            SelectiveLinear(cfg.num_options,embed_dim, self.output_embed_dim, bias=False)
+            Linear(embed_dim, self.output_embed_dim, bias=False)
             if embed_dim != self.output_embed_dim and not cfg.tie_adaptive_weights
             else None
         )
@@ -153,48 +139,48 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         self.adaptive_softmax = None
         self.output_projection = output_projection
         if self.output_projection is None:
-            self.build_output_projection(cfg, dictionary, embed_tokens)
-        # self.set_classifier_requires_grad(True)
-    def build_output_projection(self, cfg, dictionary, embed_tokens):
-        if cfg.adaptive_softmax_cutoff is not None:
-            self.adaptive_softmax = AdaptiveSoftmax(
-                len(dictionary),
-                self.output_embed_dim,
-                utils.eval_str_list(cfg.adaptive_softmax_cutoff, type=int),
-                dropout=cfg.adaptive_softmax_dropout,
-                adaptive_inputs=embed_tokens if cfg.tie_adaptive_weights else None,
-                factor=cfg.adaptive_softmax_factor,
-                tie_proj=cfg.tie_adaptive_proj,
-            )
-        elif self.share_input_output_embed:
-           
-            self.output_projection = torch.nn.Linear(
-                #self.cfg.decoder.num_options,
-                self.embed_tokens.weight.shape[1],
-                self.embed_tokens.weight.shape[0],
-                bias=False,
-            )
-            self.output_projection.weight = self.embed_tokens.weight
-        else:
-            self.output_projection = SelectiveLinear(
-                self.cfg.decoder.num_options,
-                 self.embed_tokens.weight.shape[1],
-                self.embed_tokens.weight.shape[0],
-                batch_index=0,
-                bias=False
-            )
-            nn.init.normal_(
-                self.output_projection.weight, mean=0, std=self.output_embed_dim**-0.5
-            )
-        num_base_layers = cfg.base_layers
-        for i in range(num_base_layers):
-            self.layers.insert(
-                ((i + 1) * cfg.decoder.layers) // (num_base_layers + 1),
-                BaseLayer(cfg),
-            )
+            self.build_output_projection(cfg, classifier_cfg,dictionary, embed_tokens)
+
+    
+    def build_output_projection(self,  transformer_cfg, classifier_cfg, dictionary, embed_tokens):
+    
+        self.output_projection= torch.nn.Linear(
+            embed_tokens.embedding_dim,
+            classifier_cfg.steps_classifier_classes*classifier_cfg.num_steps*2 , bias=False
+        )
+        # if cfg.adaptive_softmax_cutoff is not None:
+        #     self.adaptive_softmax = AdaptiveSoftmax(
+        #         len(dictionary),
+        #         self.output_embed_dim,
+        #         utils.eval_str_list(cfg.adaptive_softmax_cutoff, type=int),
+        #         dropout=cfg.adaptive_softmax_dropout,
+        #         adaptive_inputs=embed_tokens if cfg.tie_adaptive_weights else None,
+        #         factor=cfg.adaptive_softmax_factor,
+        #         tie_proj=cfg.tie_adaptive_proj,
+        #     )
+        # elif self.share_input_output_embed:
+        #     self.output_projection = nn.Linear(
+        #         self.embed_tokens.weight.shape[1],
+        #         self.embed_tokens.weight.shape[0],
+        #         bias=False,
+        #     )
+        #     self.output_projection.weight = self.embed_tokens.weight
+        # else:
+        #     self.output_projection = nn.Linear(
+        #         self.output_embed_dim, len(dictionary), bias=False
+        #     )
+        #     nn.init.normal_(
+        #         self.output_projection.weight, mean=0, std=self.output_embed_dim**-0.5
+        #     )
+        # num_base_layers = cfg.base_layers
+        # for i in range(num_base_layers):
+        #     self.layers.insert(
+        #         ((i + 1) * cfg.decoder.layers) // (num_base_layers + 1),
+        #         BaseLayer(cfg),
+        #     )
 
     def build_decoder_layer(self, cfg, no_encoder_attn=False):
-        layer = selective_transformer_layer.SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn)
+        layer = transformer_layer.TransformerDecoderLayerBase(cfg, no_encoder_attn)
         checkpoint = cfg.checkpoint_activations
         if checkpoint:
             offload_to_cpu = cfg.offload_activations
@@ -216,8 +202,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
-        *,
-        next_steps
     ):
         """
         Args:
@@ -237,8 +221,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
                 - a dictionary with any model-specific outputs
         """
-        #print("transformer_decoder.py:forward",prev_output_tokens.shape,index.shape)
-        
+
         x, extra = self.extract_features(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -246,20 +229,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment=full_context_alignment,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
-            index=next_steps
         )
-        #print("forward index",index.shape)
+        # print("x---",x.shape)
         if not features_only:
-            x = self.output_layer(x,next_steps)
-        # if self.next_steps_classifier_requires_grad:
-        #     @torch.enable_grad()
-        #     def backward_steps_classifier(grad):
-        #         print("grad",grad.detach().sum(),"confidence",next_steps.get_confidence().mean(),"decoder")
-        #         confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
-        #         #((grad.detach().sum())*next_steps.get_confidence().mean()).backward()
-        #     if torch.is_grad_enabled():
-        #         x.register_hook(backward_steps_classifier)
-        # x.register_hook(lambda grad:print("decoder",grad.sum()))
+            x = self.output_layer(x)
         return x, extra
 
     def extract_features(
@@ -270,7 +243,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-        index=...  
     ):
         return self.extract_features_scriptable(
             prev_output_tokens,
@@ -279,7 +251,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment,
             alignment_layer,
             alignment_heads,
-            index=index
         )
 
     """
@@ -296,8 +267,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-    
-        index=...
     ):
         """
         Similar to *forward* but only return features.
@@ -318,7 +287,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        assert index is not ...
         bs, slen = prev_output_tokens.size()
         if alignment_layer is None:
             alignment_layer = self.num_layers - 1
@@ -345,10 +313,11 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         # Prevent torchscript exporting issue for dynamic quant embedding
         prev_output_tokens = prev_output_tokens.contiguous()
         # embed tokens and positions
+        # print(prev_output_tokens.shape,self.embed_tokens)
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
         if self.quant_noise is not None:
-            x = self.quant_noise(x,index[:,:,0])
+            x = self.quant_noise(x)
 
         if self.project_in_dim is not None:
             x = self.project_in_dim(x)
@@ -386,7 +355,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,:,idx+1]
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
@@ -407,21 +375,15 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
-
+        # x.register_hook(lambda grad: print("classifier decoder grad",grad.sum()))
         return x, {"attn": [attn], "inner_states": inner_states}
 
-    def output_layer(self, features,index):
-       
+    def output_layer(self, features):
         """Project features to the vocabulary size."""
-       
-        if self.adaptive_softmax is None:
-            # project back to size of vocabulary
-            if self.share_input_output_embed:
-                return self.output_projection(features)
-            else:
-                return self.output_projection(features,index[:,:,-1])
-        else:
-            return features
+        batch_size=features.size(0)
+        # print("features---",features.shape)
+        features=features[:, -1, :]
+        return self.output_projection(features).view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps,2 )
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""
@@ -483,81 +445,11 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         return state_dict
 
 
-# def Linear(in_features, out_features, bias=True):
-#     m = nn.Linear(in_features, out_features, bias)
-#     nn.init.xavier_uniform_(m.weight)
-#     if bias:
-#         nn.init.constant_(m.bias, 0.0)
-#     return m
+def Linear(in_features, out_features, bias=True):
+    m = nn.Linear(in_features, out_features, bias)
+    nn.init.xavier_uniform_(m.weight)
+    if bias:
+        nn.init.constant_(m.bias, 0.0)
+    return m
 
 
-class TransformerDecoder(TransformerDecoderBase):
-    def __init__(
-        self,
-        cfg,
-        dictionary,
-        embed_tokens,
-        no_encoder_attn=False,
-        output_projection=None,
-    ):
-        #self.args = args
-        super().__init__(
-            cfg,
-            dictionary,
-            embed_tokens,
-            no_encoder_attn=no_encoder_attn,
-            output_projection=output_projection,
-        )
-    
-        self.next_steps_classifier=torch.nn.Module()
-
-    def forward(
-        self,
-        prev_output_tokens,
-        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
-        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-        features_only: bool = False,
-        full_context_alignment: bool = False,
-        alignment_layer: Optional[int] = None,
-        alignment_heads: Optional[int] = None,
-        src_lengths: Optional[Any] = None,
-        return_all_hiddens: bool = False,
-       
-    ):
-        # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
-        # print(prev_output_tokens.shape,"prev_output_tokens decoder")
-        
-        token_embeddings=encoder_out["encoder_out"][0]
-        token_embeddings=token_embeddings.transpose(0,1)
-        # print(token_embeddings.shape,"token_embeddings")
-        # print("decoder forward")
-        next_steps,_=self.next_steps_classifier(src_tokens=None,src_lengths=src_lengths,prev_output_tokens=prev_output_tokens,token_embeddings=token_embeddings)
-        # print(next_steps.shape,"decoder next steps")
-        #next_steps=NextSteps(next_steps)
-        # print(prev_output_tokens.shape)
-        # print("input",prev_output_tokens.shape)
-        # print("next_steps",next_steps.get_indices().shape)
-        return super().forward(
-            prev_output_tokens,
-            encoder_out=encoder_out,
-            incremental_state=incremental_state,
-            features_only=features_only,
-            full_context_alignment=full_context_alignment,
-            alignment_layer=alignment_layer,
-            alignment_heads=alignment_heads,
-            src_lengths=src_lengths,
-            return_all_hiddens=return_all_hiddens,
-            next_steps=next_steps
-        )
-        
-# class TransformerDecoderSection(nn.Module):
-#     def __init__(self, args,
-#         dictionary,
-#         embed_tokens,
-#         no_encoder_attn=False,
-#         output_projection=None) -> None:
-#         self.transformer_encoder=TransformerDecoder(args,dictionary,embed_tokens,no_encoder_attn,output_projection)
-#         self.cfg=self.transformer_encoder.cfg
-#         #self.forward_classifier_encoder=NextStepsClassifierEncoder(args,dictionary,embed_tokens,no_encoder_attn,output_projection)
-      
-     

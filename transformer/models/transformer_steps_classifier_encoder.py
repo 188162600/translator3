@@ -9,25 +9,23 @@ from typing import Dict, List, Optional
 import torch
 import torch.nn as nn
 from torch import Tensor
-from ..nn.selective_transformer_layer import SelectiveTransformerEncoderLayerBase
-from ..nn.confidence_loss import confidence_loss
+
 from fairseq import utils
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoder
 from fairseq.models.transformer import TransformerConfig
-
 from fairseq.modules import (
     FairseqDropout,
     LayerDropModuleList,
     LayerNorm,
     PositionalEmbedding,
     SinusoidalPositionalEmbedding,
-    #transformer_layer,
+    transformer_layer,
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-from ..models.transformer_steps_classifier import TransformerEncoderStepsClassifier
+
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -36,7 +34,7 @@ def module_name_fordropout(module_name: str) -> str:
         return module_name
 
 
-class TransformerEncoderBase(FairseqEncoder):
+class TransformerStepsClassifierEncoderBase(FairseqEncoder):
     """
     Transformer encoder consisting of *cfg.encoder.layers* layers. Each layer
     is a :class:`TransformerEncoderLayer`.
@@ -46,17 +44,8 @@ class TransformerEncoderBase(FairseqEncoder):
         dictionary (~fairseq.data.Dictionary): encoding dictionary
         embed_tokens (torch.nn.Embedding): input embedding
     """
-    def set_last_loss(self, loss):
-        self.next_steps_classifier.set_last_loss(loss)
-    # def set_classifier_requires_grad(self,requires_grad):
-    #     self.next_steps_classifier_requires_grad=requires_grad
-    # def set_epoch(self, epoch):
-    #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
-    #         self.set_requires_grad(True)
-    #     if hasattr(super(),"set_epoch"):
-    #         super().set_epoch(epoch)
 
-    def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
+    def __init__(self, cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
         self.cfg = cfg
         super().__init__(dictionary)
         self.register_buffer("version", torch.Tensor([3]))
@@ -103,14 +92,8 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        # shared_layer=self.build_encoder_layer(cfg)
-        # self.layers.extend(
-        #     [
-        #         shared_layer
-        #         for i in range(cfg.encoder.layers)
-        #     ]
         self.layers.extend(
-            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)]
+            [self.build_encoder_layer(cfg) for i in range(classifier_cfg.classifier_encoder_layers)]
         )
         self.num_layers = len(self.layers)
 
@@ -118,14 +101,11 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
         else:
             self.layer_norm = None
-        #self.set_classifier_requires_grad(True)
 
     def build_encoder_layer(self, cfg):
-        
-        layer = SelectiveTransformerEncoderLayerBase(
+        layer = transformer_layer.TransformerEncoderLayerBase(
             cfg, return_fc=self.return_fc
         )
-        #transformer_layer.TransformerEncoderLayerBase.forward()
         checkpoint = cfg.checkpoint_activations
         if checkpoint:
             offload_to_cpu = cfg.offload_activations
@@ -158,8 +138,6 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        *,
-        next_steps
     ):
         """
         Args:
@@ -184,9 +162,8 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
-        #print("encoder input",src_tokens.shape)
         return self.forward_scriptable(
-            src_tokens, src_lengths, return_all_hiddens, token_embeddings,next_steps=next_steps
+            src_tokens, src_lengths, return_all_hiddens, token_embeddings
         )
 
     # TorchScript doesn't support super() method so that the scriptable Subclass
@@ -199,9 +176,7 @@ class TransformerEncoderBase(FairseqEncoder):
         src_lengths: Optional[torch.Tensor] = None,
         return_all_hiddens: bool = False,
         token_embeddings: Optional[torch.Tensor] = None,
-        next_steps=None
     ):
-        
         """
         Args:
             src_tokens (LongTensor): tokens in the source language of shape
@@ -225,25 +200,29 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
-        # # index=next_steps.get_mapped_indices()
-        # assert index is not None
-        
         # compute padding mask
-        encoder_padding_mask = src_tokens.eq(self.padding_idx)
-        has_pads = (
+        if src_tokens is not None:
+            encoder_padding_mask = src_tokens.eq(self.padding_idx)
+            has_pads = (
             torch.tensor(src_tokens.device.type == "xla") or encoder_padding_mask.any()
-        )
-        # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
-        if torch.jit.is_scripting():
-            has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
+            )
+            # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
+            if torch.jit.is_scripting():
+                has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
+            
+        else:
+            encoder_padding_mask=None
+            has_pads=torch.tensor(0)
+        
 
         x, encoder_embedding = self.forward_embedding(src_tokens, token_embeddings)
 
         # account for padding while computing the representation
-        x = x * (
-            1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
-        )
-
+        if src_tokens is not None:
+            x = x * (
+                1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
+            )
+        # print("x shape",x.shape,src_tokens.shape if src_tokens is not None else None,token_embeddings.shape if token_embeddings is not None else None)
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
@@ -254,12 +233,9 @@ class TransformerEncoderBase(FairseqEncoder):
             encoder_states.append(x)
 
         # encoder layers
-        #print("index",index.shape,x.shape)
-        
-        for idx, layer in enumerate( self.layers):
-            
+        for layer in self.layers:
             lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps[:,:,idx]
+                x, encoder_padding_mask=encoder_padding_mask if has_pads else None
             )
 
             if isinstance(lr, tuple) and len(lr) == 2:
@@ -280,21 +256,13 @@ class TransformerEncoderBase(FairseqEncoder):
         # `forward` so we use a dictionary instead.
         # TorchScript does not support mixed values so the values are all lists.
         # The empty list is equivalent to None.
-        # @torch.enable_grad()
-        # def backward_steps_classifier(grad):
-        #     confidence_loss(grad.detach().sum(),next_steps.get_confidence().mean()).backward()
-        # if torch.is_grad_enabled():
-        #     x.register_hook(backward_steps_classifier)
-            
-       
-        src_lengths = (
-            src_tokens.ne(self.padding_idx)
-            .sum(dim=1, dtype=torch.int32)
-            .reshape(-1, 1)
-            .contiguous()
-        )
-        # x.register_hook(lambda grad: print("encoder",grad.sum()))
-        #print("encode out",x.shape)
+        # src_lengths = (
+        #     src_tokens.ne(self.padding_idx)
+        #     .sum(dim=1, dtype=torch.int32)
+        #     .reshape(-1, 1)
+        #     .contiguous()
+        # )
+        # x.register_hook(lambda grad: print("classifier encoder grad",grad.sum()))
         return {
             "encoder_out": [x],  # T x B x C
             "encoder_padding_mask": [encoder_padding_mask],  # B x T
@@ -302,7 +270,7 @@ class TransformerEncoderBase(FairseqEncoder):
             "encoder_states": encoder_states,  # List[T x B x C]
             "fc_results": fc_results,  # List[T x B x C]
             "src_tokens": [],
-            "src_lengths": [src_lengths],
+            # "src_lengths": [src_lengths],
         }
 
     @torch.jit.export
@@ -348,7 +316,7 @@ class TransformerEncoderBase(FairseqEncoder):
         if len(encoder_states) > 0:
             for idx, state in enumerate(encoder_states):
                 encoder_states[idx] = state.index_select(1, new_order)
-                
+
         return {
             "encoder_out": new_encoder_out,  # T x B x C
             "encoder_padding_mask": new_encoder_padding_mask,  # B x T
@@ -386,45 +354,3 @@ class TransformerEncoderBase(FairseqEncoder):
         return state_dict
 
 
-class TransformerEncoder(TransformerEncoderBase):
-    def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
-        #self.args = args
-        super().__init__(
-            cfg,
-            dictionary,
-            embed_tokens,
-            return_fc=return_fc,
-        )
-        self.next_steps_classifier =torch.nn.Module()
-
-        
-
-    def forward(
-        self,
-        prev_output_tokens,
-        src_tokens,
-        src_lengths: Optional[torch.Tensor] = None,
-        return_all_hiddens: bool = False,
-        token_embeddings: Optional[torch.Tensor] = None,
-    ):
-        # print("encoder forward")
-        next_steps,_=self.next_steps_classifier(src_tokens.detach(),src_lengths,prev_output_tokens)
-        # print("encoder next steps",next_steps.shape)
-        #next_steps=NextSteps(next_steps)
-        # print("en input",src_tokens.shape)
-        # print("en next_steps",next_steps.get_indices().shape)
-        return super().forward(
-            src_tokens=src_tokens,
-            src_lengths=src_lengths,
-            return_all_hiddens=return_all_hiddens,
-            token_embeddings=token_embeddings,
-            next_steps=next_steps
-        )
-        
-# class TransformerEncoderSection(nn.Module):
-#     def __init__(self, args, dictionary, embed_tokens, return_fc=False):
-#         self.encoder=TransformerEncoder(args,dictionary,embed_tokens,return_fc=return_fc)
-        
-#         self.next_step_classifier=NextStepClassifier(args,embed_tokens) 
-#         self.restored_steps=RestoredSteps(args,embed_tokens)
-#     def 
