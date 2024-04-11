@@ -163,6 +163,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         which are not supported by TorchScript.
         """
         next_steps_logits,_=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
+        next_steps_logits=next_steps_logits.contiguous()
         next_steps=NextSteps(next_steps_logits,self.cfg)
         encoder_out = self.encoder(
             src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps.get_for_encoder()
