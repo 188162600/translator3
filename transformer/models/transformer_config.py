@@ -78,19 +78,10 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
     options_each_layer:int = field(
         default=4,metadata={"help":"number of options"}
     )
-    shared_options_each_layer:int = field(
-        default=2,metadata={"help":"number of shared options in each layer"}
-    )
+ 
     
     
-    
-    # total_options:int=None
-    steps_classifier_shared_classes:int = field(
-        default=II("model.encoder.shared_options_each_layer"),
-    )
-    steps_classifier_non_shared_classes:int = field(
-        default=II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"),
-    )
+ 
     classifier_encoder_layers:int = field(
         default=3,metadata={"help":"number of classifier layers"}
     )
@@ -113,10 +104,7 @@ class SelectiveEncDecBaseConfig(EncDecBaseConfig):
             self.num_steps = self.layers
         if self.steps_classifier_classes == II("model.encoder.options_each_layer"):
             self.steps_classifier_classes = self.options_each_layer
-        if self.steps_classifier_shared_classes == II("model.encoder.shared_options_each_layer"):
-            self.steps_classifier_shared_classes = self.shared_options_each_layer
-        if self.steps_classifier_non_shared_classes == II("model.encoder.options_each_layer-model.encoder.shared_options_each_layer"):
-            self.steps_classifier_non_shared_classes = self.options_each_layer-self.shared_options_each_layer
+       
         #print(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
         #if self.total_options is None:
         # self.total_options=_get_total_options(self.sharing_method,self.steps_classifier_classes,self.shared_options_each_layer,self.steps_classifier_non_shared_classes,self.num_steps)
@@ -156,8 +144,11 @@ class SelectiveDecoderConfig(SelectiveEncDecBaseConfig):
     # classifier_layers:int = field(
     #     default=2,metadata={"help":"number of classifier layers"}
     # )
-    num_decoder_layers:int = field(
-        default=4,metadata={"help":"number of decoder layers"}
+    classifier_encoder_layers:int = field(
+        default=1,metadata={"help":"number of classifier layers"}
+    )
+    classifier_decoder_layers:int = field(
+        default=3,metadata={"help":"number of classifier layers"}
     )
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
