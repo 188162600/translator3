@@ -259,7 +259,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         #         #((grad.detach().sum())*next_steps.get_confidence().mean()).backward()
         #     if torch.is_grad_enabled():
         #         x.register_hook(backward_steps_classifier)
-        x.register_hook(lambda grad:print("decoder",grad.sum()))
+        # x.register_hook(lambda grad:print("decoder",grad.sum()))
         return x, extra
 
     def extract_features(

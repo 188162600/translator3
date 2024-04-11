@@ -293,7 +293,7 @@ class TransformerEncoderBase(FairseqEncoder):
             .reshape(-1, 1)
             .contiguous()
         )
-        x.register_hook(lambda grad: print("encoder",grad.sum()))
+        # x.register_hook(lambda grad: print("encoder",grad.sum()))
         #print("encode out",x.shape)
         return {
             "encoder_out": [x],  # T x B x C
