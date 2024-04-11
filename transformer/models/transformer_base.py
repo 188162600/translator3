@@ -166,7 +166,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         next_steps_logits,_=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
         
         encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps_logits[:,:,:self.cfg.encoder.layers]
+            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps_logits
         )
         # print("encoder_out",encoder_out["encoder_out"][0].shape)
         decoder_out = self.decoder(
@@ -177,7 +177,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            next_steps=next_steps_logits[:,:,self.cfg.encoder.layers:]
+            next_steps=next_steps_logits
         )
         return decoder_out
 
