@@ -259,6 +259,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         #         #((grad.detach().sum())*next_steps.get_confidence().mean()).backward()
         #     if torch.is_grad_enabled():
         #         x.register_hook(backward_steps_classifier)
+        x.register_hook(lambda grad:print("decoder",grad.sum()))
         return x, extra
 
     def extract_features(
@@ -412,7 +413,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
     def output_layer(self, features,index):
        
         """Project features to the vocabulary size."""
-        
+       
         if self.adaptive_softmax is None:
             # project back to size of vocabulary
             if self.share_input_output_embed:
@@ -526,7 +527,7 @@ class TransformerDecoder(TransformerDecoderBase):
         # print("transformer_decoder.py:forward0",prev_output_tokens.shape)
         
         next_steps=self.next_steps_classifier.forward(src_tokens=prev_output_tokens.detach(),src_lengths=src_lengths)["next_steps"][0]
-        
+    
         #next_steps=NextSteps(next_steps)
         # print(prev_output_tokens.shape)
         # print("input",prev_output_tokens.shape)

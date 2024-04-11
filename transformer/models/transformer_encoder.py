@@ -293,6 +293,7 @@ class TransformerEncoderBase(FairseqEncoder):
             .reshape(-1, 1)
             .contiguous()
         )
+        x.register_hook(lambda grad: print("encoder",grad.sum()))
         #print("encode out",x.shape)
         return {
             "encoder_out": [x],  # T x B x C
@@ -347,7 +348,7 @@ class TransformerEncoderBase(FairseqEncoder):
         if len(encoder_states) > 0:
             for idx, state in enumerate(encoder_states):
                 encoder_states[idx] = state.index_select(1, new_order)
-       
+                
         return {
             "encoder_out": new_encoder_out,  # T x B x C
             "encoder_padding_mask": new_encoder_padding_mask,  # B x T

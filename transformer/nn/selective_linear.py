@@ -49,9 +49,9 @@ class SelectiveLinear(Module):
         # print("x.shape",x.shape,selection_logits.shape,self.num_options)
         # print("weights.shape",self.weights.shape)
         # Compute selection probabilities from logits using softmax
-        selection_probs = F.softmax(selection_logits / temperature, dim=-1)
+        # selection_probs = F.softmax(selection_logits / temperature, dim=-1)
         # print("Selection probs shape:", selection_probs.shape)
-
+        selection_probs=selection_logits
         transformed = torch.einsum('nij,baj->bani', self.weights, x)
         # transformed=self.activation(transformed)
 

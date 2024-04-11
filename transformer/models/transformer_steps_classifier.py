@@ -239,7 +239,8 @@ class TransformerStepsClassifierBase(FairseqEncoder):
         
         output= self.output_projection(features[0])
         batch_size=output.size(0)
-        
+        output.register_hook(lambda grad: print(grad.sum()))
+     
         return output.view(batch_size,self.classifier_cfg.steps_classifier_classes,self.classifier_cfg.num_steps,2 )
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
