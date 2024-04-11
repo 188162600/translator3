@@ -20,6 +20,23 @@ from ..models.transformer_steps_classifier_encoder import TransformerStepsClassi
 
 logger = logging.getLogger(__name__)
 
+class NextSteps:
+    def __init__(self,tensor,cfg,index_start=0 ) -> None:
+        self.tensor=tensor
+        self.cfg=cfg
+        self.index_start=index_start
+    
+    def get_for_fc1(self,index=0):
+        return self.tensor[:,:,self.index_start+index,0]
+    def get_for_fc2(self,index=0):
+        return self.tensor[:,:,self.index_start+index,1]
+    def get_for_layer(self,index):
+        return NextSteps(self.tensor,self.cfg,index_start=self.index_start+index)
+    def get_for_encoder(self):
+        return NextSteps(self.tensor,self.cfg,index_start=0)
+    def get_for_decoder(self):
+        return NextSteps(self.tensor,self.cfg,index_start=self.cfg.encoder.layers)
+
 
 class TransformerStepsClassifierBase(FairseqEncoderDecoderModel):
     """

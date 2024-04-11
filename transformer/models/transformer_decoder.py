@@ -386,7 +386,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_padding_mask=self_attn_padding_mask,
                 need_attn=bool((idx == alignment_layer)),
                 need_head_weights=bool((idx == alignment_layer)),
-                index=index[:,:,idx+self.cfg.encoder.layers]
+                index=index.get_for_layer(idx)
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:

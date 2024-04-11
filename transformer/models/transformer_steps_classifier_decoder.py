@@ -383,7 +383,9 @@ class TransformerStepsClassifierDecoderBase(FairseqIncrementalDecoder):
         # print("features---",features.shape)
         features=features[:, 0, :]
         #  cfg.options_each_layer*(cfg.encoder.layers+cfg.decoder.layers)*2
-        return self.output_projection(features).view(batch_size,self.cfg.options_each_layer,(self.cfg.encoder.layers+self.cfg.decoder.layers),2 )
+        output=self.output_projection(features)
+        # output=output.contiguous()
+        return output.view(batch_size,self.cfg.options_each_layer,(self.cfg.encoder.layers+self.cfg.decoder.layers),2 )
 
     def max_positions(self):
         """Maximum output length supported by the decoder."""

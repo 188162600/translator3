@@ -18,8 +18,7 @@ from fairseq.models import FairseqEncoderDecoderModel
 from ..models.transformer_config import TransformerConfig
 from ..models.transformer_decoder import TransformerDecoderBase
 from ..models.transformer_encoder import TransformerEncoderBase
-from ..models.transformer_steps_classifier import TransformerStepsClassifier
-
+from ..models.transformer_steps_classifier import TransformerStepsClassifier,NextSteps
 
 logger = logging.getLogger(__name__)
 
@@ -164,9 +163,9 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         which are not supported by TorchScript.
         """
         next_steps_logits,_=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
-        
+        next_steps=NextSteps(next_steps_logits,self.cfg)
         encoder_out = self.encoder(
-            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps_logits
+            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps.get_for_encoder()
         )
         # print("encoder_out",encoder_out["encoder_out"][0].shape)
         decoder_out = self.decoder(
@@ -177,7 +176,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            next_steps=next_steps_logits
+            next_steps=next_steps.get_for_decoder()
         )
         return decoder_out
 
