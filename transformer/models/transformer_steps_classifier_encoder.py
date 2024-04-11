@@ -201,27 +201,25 @@ class TransformerStepsClassifierEncoderBase(FairseqEncoder):
                   Only populated if *return_all_hiddens* is True.
         """
         # compute padding mask
-        if src_tokens is not None:
-            encoder_padding_mask = src_tokens.eq(self.padding_idx)
-            has_pads = (
-            torch.tensor(src_tokens.device.type == "xla") or encoder_padding_mask.any()
-            )
-            # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
-            if torch.jit.is_scripting():
-                has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
+    
+        encoder_padding_mask = src_tokens.eq(self.padding_idx)
+        has_pads = (
+        torch.tensor(src_tokens.device.type == "xla") or encoder_padding_mask.any()
+        )
+        # Torchscript doesn't handle bool Tensor correctly, so we need to work around.
+        if torch.jit.is_scripting():
+            has_pads = torch.tensor(1) if has_pads else torch.tensor(0)
             
-        else:
-            encoder_padding_mask=None
-            has_pads=torch.tensor(0)
+      
         
 
         x, encoder_embedding = self.forward_embedding(src_tokens, token_embeddings)
 
         # account for padding while computing the representation
-        if src_tokens is not None:
-            x = x * (
-                1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
-            )
+    
+        x = x * (
+            1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
+        )
         # print("x shape",x.shape,src_tokens.shape if src_tokens is not None else None,token_embeddings.shape if token_embeddings is not None else None)
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
