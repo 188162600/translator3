@@ -341,7 +341,19 @@ class TransformerStepsClassifier(TransformerModelBase):
         
         batch_size=out.size(0)
         return NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
+<<<<<<< HEAD
    
+=======
+    def set_last_loss(self, loss):
+        #loss=loss.detach()
+        #  def set_last_loss(self, loss):
+        
+        
+        if torch.is_grad_enabled():
+            (torch.sum(self.previous_steps)*loss.detach() ).backward()
+            self.previous_steps=None
+       
+>>>>>>> parent of 3a4d7fd (Update transformer_base.py)
     def forward(
         self,
         src_tokens,
