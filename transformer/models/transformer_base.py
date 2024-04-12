@@ -19,8 +19,7 @@ from ..models.transformer_config import TransformerConfig
 from ..models.transformer_decoder import TransformerDecoder
 from ..models.transformer_encoder import TransformerEncoder
 from ..nn.logit_gambler import LogitGambler
-from ..models.next_steps import NextStepsForEncoderAttn,NextSteps
-from ..models.transformer_steps_classifier import TransformerStepsClassifier
+
 # from ..models.transformer_steps_classifier import TransformerStepsClassifier,NextSteps
 
 logger = logging.getLogger(__name__)
@@ -215,11 +214,6 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
     nn.init.normal_(m.weight, mean=0, std=embedding_dim**-0.5)
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
-<<<<<<< HEAD
-
-
-
-=======
 class NextStepsForEncoderAttn:
     def __init__(self,instance) -> None:
         self.instance=instance
@@ -318,10 +312,13 @@ class GamblerNextStepsClassifier(nn.Module):
         self.logit_gambler=LogitGambler((cfg.encoder.classifier_layers+cfg.encoder.classifier_layers,cfg.selective_layers ,cfg.options_each_layer,))
        
         # print("GamblerNextStepsClassifier2",self.logit_gambler())
-        
+    def set_last_loss(self, loss):
+      if torch.is_grad_enabled():
+            (torch.sum(self.previous_steps.logit)*loss.detach() ).backward()
+            self.previous_steps=None
     def forward(self,src_tokens,
         src_lengths,
-        prev_output_tokens,
+      
         return_all_hiddens: bool = True,
         features_only: bool = False,
         alignment_layer: Optional[int] = None,
@@ -329,7 +326,9 @@ class GamblerNextStepsClassifier(nn.Module):
         # print(torch.is_grad_enabled(),"torch.is_grad_enabled()")
         # self.logit_gambler.train()
         # print("vvv",self.logit_gambler())
-        return GamblerNextSteps(self.logit_gambler(),self.cfg)
+        print("gamble",self.logit_gambler().shape)
+        self.previous_steps=GamblerNextSteps(self.logit_gambler() ,self.cfg)
+        return self.previous_steps
     
 class TransformerStepsClassifier(TransformerModelBase):
     def __init__(self, cfg, encoder, decoder):
@@ -349,29 +348,28 @@ class TransformerStepsClassifier(TransformerModelBase):
         
         
         batch_size=out.size(0)
-        return NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
+        print(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options).shape ,"classifier_out")
+        self.previous_steps= NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
+        return self.previous_steps
     def set_last_loss(self, loss):
         #loss=loss.detach()
         #  def set_last_loss(self, loss):
         
-        
-        if torch.is_grad_enabled():
-            (torch.sum(self.previous_steps)*loss.detach() ).backward()
-            self.previous_steps=None
+        self.next_steps_classifier.set_last_loss(loss)
+      
        
     def forward(
         self,
         src_tokens,
         src_lengths,
-        prev_output_tokens,
         return_all_hiddens: bool = True,
         features_only: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
     ):
-        
-        next_steps=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
-        self.previous_steps=next_steps.logit
+        print("src_tokens",src_tokens.shape)
+        next_steps=self.next_steps_classifier(src_tokens, src_lengths)
+        # self.previous_steps=next_steps.logit
         # print("ff logits",next_steps.logit)
         # print(next_steps.logit,"next_steps.logit.shape")
         # print(next_steps.get_for_encoder().encoder_decoder_cfg is None,"next_steps.get_for_encoder().encoder_decoder_cfg")
@@ -380,21 +378,22 @@ class TransformerStepsClassifier(TransformerModelBase):
             src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps.get_for_encoder()
         )
         # print("encoder_out",encoder_out["encoder_out"][0].shape)
-        decoder_out,_ = self.decoder(
-            prev_output_tokens,
-            encoder_out=encoder_out,
-            features_only=True,
-            alignment_layer=alignment_layer,
-            alignment_heads=alignment_heads,
-            src_lengths=src_lengths,
-            return_all_hiddens=return_all_hiddens,
-            next_steps=next_steps.get_for_decoder()
-        )
+        # decoder_out,_ = self.decoder(
+        #     prev_output_tokens,
+        #     encoder_out=encoder_out,
+        #     features_only=True,
+        #     alignment_layer=alignment_layer,
+        #     alignment_heads=alignment_heads,
+        #     src_lengths=src_lengths,
+        #     return_all_hiddens=return_all_hiddens,
+        #     next_steps=next_steps.get_for_decoder()
+        # )
+        out=encoder_out["encoder_out"][0].transpose(0,1)
+        print("out",out.shape)
         # print("decoder_out",decoder_out.shape)
         if not features_only:
-            decoder_out=self.output_layer(decoder_out)
+            decoder_out=self.output_layer(out)
         return decoder_out
->>>>>>> parent of 3a4d7fd (Update transformer_base.py)
 
     # def get_for_layer(self,index):
     #     return GamblerNextSteps(self.logit_gambler,self.cfg,self.encoder_decoder_cfg,index+self.index)

@@ -5,7 +5,7 @@
 
 import math
 from typing import Dict, List, Optional
-from..models.next_steps import NextSteps
+
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -428,9 +428,8 @@ class TransformerEncoder(TransformerEncoderBase):
         # print("encoder forward")
         # print(self.next_steps_classifier.__class__,"next steps classifier")
         if next_steps is None:
-            next_steps_logit=self.next_steps_classifier()(src_tokens,src_lengths)
-            next_steps= NextSteps( next_steps_logit,self.cfg).get_for_encoder()
-        
+            next_steps=self.next_steps_classifier()(src_tokens,src_lengths)
+       
         return super().forward(
             src_tokens=src_tokens,
             src_lengths=src_lengths,

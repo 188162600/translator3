@@ -5,7 +5,7 @@
 
 import math
 from typing import Any, Dict, List, Optional
-from ..models.next_steps import NextSteps
+
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -558,9 +558,9 @@ class TransformerDecoder(TransformerDecoderBase):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            next_steps=NextSteps( next_steps,self.cfg).get_for_decoder()
+            next_steps= next_steps.get_for_decoder()
         )
-        self.next_steps_classifier.previous_steps=None
+        # self.next_steps_classifier().previous_steps=None
         return out
     
     
