@@ -32,7 +32,7 @@ class NextSteps:
     def get_for_fc2(self):
         return self.logits[:,self.index,self.encoder_decoder_cfg.fc2_selection_index]
     def get_for_q_proj(self):
-        print("self.logits.next",self.logits.shape)
+        # print("self.logits.next",self.logits.shape)
         return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_q_proj_selection_index]
     def get_for_k_proj(self):
         return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_k_proj_selection_index]
