@@ -103,7 +103,7 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        shared_layer=self.build_encoder_layer(cfg)
+        shared_layer=self.build_selective_encoder_layer(cfg)
         # self.layers.extend(
         #     [
         #         shared_layer
