@@ -87,7 +87,7 @@ class SelectiveLinear(Module):
         if self.batch_index != 0:
             x = x.transpose(0, self.batch_index)
         
-        transformed = torch.einsum('nij,baj->bani', self.weights, x)
+        transformed = torch.einsum('nij,baj->bani', self.weight, x)
         # transformed=self.activation(transformed)
         # # transformed=self.activation(transformed)
 
