@@ -10,19 +10,19 @@ import torch.nn as nn
 from torch import Tensor
 
 import logging
-
+from ..models.next_steps import NextSteps,NextStepsForEncoderAttn
 from fairseq import utils
 from fairseq.dataclass.utils import gen_parser_from_dataclass
 from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqEncoderDecoderModel
 from ..models.transformer_config import TransformerConfig
-from ..models.transformer_decoder import TransformerDecoderBase
-from ..models.transformer_encoder import TransformerEncoderBase
+from ..models.transformer_decoder import TransformerDecoder
+from ..models.transformer_encoder import TransformerEncoder
 from ..nn.logit_gambler import LogitGambler
 # from ..models.transformer_steps_classifier import TransformerStepsClassifier,NextSteps
 
 logger = logging.getLogger(__name__)
-
+import weakref
     
 class TransformerModelBase(FairseqEncoderDecoderModel):
     """
@@ -48,6 +48,8 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         if next_steps_classifier is None:
             next_steps_classifier=TransformerStepsClassifier(cfg,encoder,decoder)
         self.next_steps_classifier=next_steps_classifier
+        encoder.next_steps_classifier=weakref.ref(next_steps_classifier)
+        decoder.next_steps_classifier=weakref.ref(next_steps_classifier)
         # self.next_steps_classifier=GamblerNextStepsClassifier(cfg)
         # encoder.next_steps_classifier=TransformerEncoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
         # decoder.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
@@ -56,9 +58,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         #  def set_last_loss(self, loss):
         
         
-        if torch.is_grad_enabled():
-            (torch.sum(self.previous_steps)*loss.detach() ).backward()
-            self.previous_steps=None
+      
         if hasattr(self.next_steps_classifier,"set_last_loss"):
             self.next_steps_classifier.set_last_loss(loss)
         
@@ -144,11 +144,11 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
 
     @classmethod
     def build_encoder(cls, cfg, src_dict, embed_tokens):
-        return TransformerEncoderBase(cfg, src_dict, embed_tokens)
+        return TransformerEncoder(cfg, src_dict, embed_tokens)
 
     @classmethod
     def build_decoder(cls, cfg, tgt_dict, embed_tokens):
-        return TransformerDecoderBase(
+        return TransformerDecoder(
             cfg,
             tgt_dict,
             embed_tokens,
@@ -211,60 +211,11 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
     nn.init.normal_(m.weight, mean=0, std=embedding_dim**-0.5)
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
-class NextStepsForEncoderAttn:
-    def __init__(self,instance) -> None:
-        self.instance=instance
-    def get_for_q_proj(self):
-        return self.instance.get_for_encoder_attn_q_proj()
-    def get_for_k_proj(self):
-        return self.instance.get_for_encoder_attn_k_proj()
-    def get_for_v_proj(self):
-        return self.instance.get_for_encoder_attn_v_proj()
-    def get_for_out_proj(self):
-        return self.instance.get_for_encoder_attn_out_proj()
-class NextSteps:
-    def __init__(self,logits,cfg,encoder_decoder_cfg=None,index=0) -> None:
-        self.logits=logits
-        self.index=index
-        self.cfg=cfg
-        self.encoder_decoder_cfg=encoder_decoder_cfg
-    def requires_grad_for_layer(self,index):
-        return True
-    def get_for_encoder_attn(self):
-        return NextStepsForEncoderAttn(self)
-    def get_layers(self):
-        return self.encoder_decoder_cfg.transformer_layers
-    def get_for_layer(self,index):
-        return NextSteps(self.logits,self.cfg,self.encoder_decoder_cfg,index+self.index,)
-    def get_for_encoder(self):
-        return NextSteps(self.logits,self.cfg,self.cfg.encoder,0)
-    def get_for_decoder(self):
-        return NextSteps(self.logits,self.cfg,self.cfg.decoder,self.cfg.encoder.selective_layers)
-    def get_for_fc1(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.fc1_selection_index]
-    def get_for_fc2(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.fc2_selection_index]
-    def get_for_q_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_q_proj_selection_index]
-    def get_for_k_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_k_proj_selection_index]
-    def get_for_v_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_v_proj_selection_index]
-    def get_for_out_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_out_proj_selection_index]
-    def get_for_encoder_attn_q_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_q_proj_selection_index]
-    def get_for_encoder_attn_k_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_k_proj_selection_index]
-    def get_for_encoder_attn_v_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_v_proj_selection_index]
-    def get_for_encoder_attn_out_proj(self):
-        return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_out_proj_selection_index]
-        
+
     
 class GamblerNextSteps:
-    def __init__(self,logit,cfg,encoder_decoder_cfg=None,index=0) -> None:
-        self.logit=logit
+    def __init__(self,logits,cfg,encoder_decoder_cfg=None,index=0) -> None:
+        self.logits=logits
         self.index=index
         self.cfg=cfg
         self.encoder_decoder_cfg=encoder_decoder_cfg
@@ -275,31 +226,32 @@ class GamblerNextSteps:
     def requires_grad_for_layer(self,index):
         return index>=self.encoder_decoder_cfg.transformer_layers
     def get_for_layer(self,index):
-        return GamblerNextSteps(self.logit,self.cfg,self.encoder_decoder_cfg,index+self.index)
+        return GamblerNextSteps(self.logits,self.cfg,self.encoder_decoder_cfg,index+self.index)
     def get_for_encoder(self):
-        return GamblerNextSteps(self.logit,self.cfg,self.cfg.encoder,0)
+        return GamblerNextSteps(self.logits,self.cfg,self.cfg.encoder,0)
     def get_for_decoder(self):
-        return GamblerNextSteps(self.logit,self.cfg,self.cfg.decoder,self.cfg.encoder.selective_layers)
+        return GamblerNextSteps(self.logits,self.cfg,self.cfg.decoder,self.cfg.encoder.selective_layers)
     def get_for_fc1(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.fc1_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.fc1_selection_index]
     def get_for_fc2(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.fc2_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.fc2_selection_index]
     def get_for_q_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.self_attn_q_proj_selection_index]
+        # print(self.logits.shape,"self.logits.shape")
+        return self.logits[self.index,self.encoder_decoder_cfg.self_attn_q_proj_selection_index]
     def get_for_k_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.self_attn_k_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.self_attn_k_proj_selection_index]
     def get_for_v_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.self_attn_v_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.self_attn_v_proj_selection_index]
     def get_for_out_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.self_attn_out_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.self_attn_out_proj_selection_index]
     def get_for_encoder_attn_q_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.encoder_attn_q_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.encoder_attn_q_proj_selection_index]
     def get_for_encoder_attn_k_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.encoder_attn_k_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.encoder_attn_k_proj_selection_index]
     def get_for_encoder_attn_v_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.encoder_attn_v_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.encoder_attn_v_proj_selection_index]
     def get_for_encoder_attn_out_proj(self):
-        return self.logit[self.index,self.encoder_decoder_cfg.encoder_attn_out_proj_selection_index]
+        return self.logits[self.index,self.encoder_decoder_cfg.encoder_attn_out_proj_selection_index]
     
 class GamblerNextStepsClassifier(nn.Module):
     def __init__(self, cfg):
@@ -332,18 +284,20 @@ class TransformerStepsClassifier(TransformerModelBase):
         self.selective_layers=cfg.selective_layers
         self.total_layers=cfg.encoder.layers+cfg.decoder.layers
         self.num_options=cfg.options_each_layer
-        self.output_projection=nn.Linear(cfg.decoder.embed_dim, self.total_layers*self.selective_layers*self.num_options,bias=False)
+        self.output_projection=nn.Linear(cfg.decoder.embed_dim, self.selective_layers*self.num_options,bias=False)
     def output_layer(self,features):
-        features=features[:,0,:]
-        # print("features",features.shape)
-        out=self.output_projection(features)
+        # features=features[:,0,:]
         
+        # print("features",features.shape)
+        # print("features---",features.shape)
+        out=self.output_projection(features)[:,:self.total_layers]
+        # print("out",out.shape)
         
         batch_size=out.size(0)
-        return NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
-<<<<<<< HEAD
-   
-=======
+        out=out.view(batch_size, self.total_layers,self.selective_layers,self.num_options)
+        out=torch.softmax(out,dim=-1)
+        
+        return NextSteps( out,self.cfg)
     def set_last_loss(self, loss):
         #loss=loss.detach()
         #  def set_last_loss(self, loss):
@@ -353,7 +307,6 @@ class TransformerStepsClassifier(TransformerModelBase):
             (torch.sum(self.previous_steps)*loss.detach() ).backward()
             self.previous_steps=None
        
->>>>>>> parent of 3a4d7fd (Update transformer_base.py)
     def forward(
         self,
         src_tokens,
@@ -366,14 +319,17 @@ class TransformerStepsClassifier(TransformerModelBase):
     ):
         
         next_steps=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
-        self.previous_steps=next_steps.logit
-        # print("ff logits",next_steps.logit)
-        # print(next_steps.logit,"next_steps.logit.shape")
+        self.previous_steps=next_steps.logits
+        # print("ff logits",next_steps.logits)
+        # print(next_steps.logits,"next_steps.logits.shape")
         # print(next_steps.get_for_encoder().encoder_decoder_cfg is None,"next_steps.get_for_encoder().encoder_decoder_cfg")
         # with torch.no_grad():
         encoder_out = self.encoder(
             src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps.get_for_encoder()
         )
+        # print("total_layers",self.total_layers)
+        if prev_output_tokens is None:
+            prev_output_tokens=torch.zeros((src_tokens.size(0),self.total_layers),dtype=torch.long,device=src_tokens.device)
         # print("encoder_out",encoder_out["encoder_out"][0].shape)
         decoder_out,_ = self.decoder(
             prev_output_tokens,
@@ -385,9 +341,11 @@ class TransformerStepsClassifier(TransformerModelBase):
             return_all_hiddens=return_all_hiddens,
             next_steps=next_steps.get_for_decoder()
         )
+        # decoder_out=encoder_out["encoder_out"][0].transpose(0,1)
         # print("decoder_out",decoder_out.shape)
         if not features_only:
             decoder_out=self.output_layer(decoder_out)
+        # decoder_out.logits.register_hook(lambda grad:print("grad",grad.sum()))
         return decoder_out
 
     # def get_for_layer(self,index):

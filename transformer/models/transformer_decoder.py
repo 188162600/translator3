@@ -22,7 +22,7 @@ from fairseq.modules.transformer_layer import TransformerDecoderLayerBase
 from ..nn.confidence_loss import confidence_loss
 
 from ..models.transformer_config import TransformerConfig
-
+from ..models.next_steps import NextSteps
 # from fairseq.models.transformer import TransformerConfig
 from fairseq.modules import (
     AdaptiveSoftmax,
@@ -542,12 +542,24 @@ class TransformerDecoder(TransformerDecoderBase):
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
-        return_all_hiddens: bool = False):
+        return_all_hiddens: bool = False,next_steps=None):
         # print(encoder_out.keys(),"key2")
         # print(encoder_out.keys(),"key2","requirs_grad",encoder_out["encoder_out"][0].requires_grad)
         # next_steps= encoder_out["next_steps"][0]
-        next_steps=self.next_steps_classifier().previous_steps
-   
+        # next_steps=self.next_steps_classifier().previous_steps
+        # if next_steps is None:
+        #     source_tokens=encoder_out["src_tokens"]
+        #     source_lengths=encoder_out["src_lengths"]
+        #     print("source_tokens",source_tokens)
+        #     print("source_lengths",source_lengths)
+        #     # print("source_tokens",source_tokens.shape)
+        #     next_steps=self.next_steps_classifier()(src_tokens=source_tokens,src_lengths=source_lengths,prev_output_tokens=prev_output_tokens)
+        # print(prev_output_tokens)
+        # print("decoder forward",encoder_out.keys())
+        # if next_steps is None:
+        next_steps=encoder_out["next_steps"]
+        # print("decoder forward NEXT",next_steps.shape)
+        # next_steps=NextSteps(next_steps,self.cfg)
         out= super().forward(
             prev_output_tokens,
             encoder_out=encoder_out,

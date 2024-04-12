@@ -336,6 +336,7 @@ class TransformerEncoderBase(FairseqEncoder):
         Returns:
             *encoder_out* rearranged according to *new_order*
         """
+        # print(new_order)
         if len(encoder_out["encoder_out"]) == 0:
             new_encoder_out = []
         else:
@@ -367,7 +368,11 @@ class TransformerEncoderBase(FairseqEncoder):
         if len(encoder_states) > 0:
             for idx, state in enumerate(encoder_states):
                 encoder_states[idx] = state.index_select(1, new_order)
-                
+        next_steps=encoder_out["next_steps"]
+        beam_size = new_order.size(0) // encoder_out["encoder_out"][0].size(1)
+        # print("beam_size",beam_size)
+        next_steps.logits=next_steps.logits.repeat(beam_size,1,1,1)
+        # torch.Tensor.repeat()
         return {
             "encoder_out": new_encoder_out,  # T x B x C
             "encoder_padding_mask": new_encoder_padding_mask,  # B x T
@@ -375,6 +380,7 @@ class TransformerEncoderBase(FairseqEncoder):
             "encoder_states": encoder_states,  # List[T x B x C]
             "src_tokens": src_tokens,  # B x T
             "src_lengths": src_lengths,  # B x 1
+            "next_steps": next_steps
         }
 
     @torch.jit.export
@@ -428,14 +434,16 @@ class TransformerEncoder(TransformerEncoderBase):
         # print("encoder forward")
         # print(self.next_steps_classifier.__class__,"next steps classifier")
         if next_steps is None:
-            next_steps=self.next_steps_classifier()(src_tokens,src_lengths)
-       
-        return super().forward(
+            next_steps=self.next_steps_classifier()(src_tokens,src_lengths,None)
+            
+        result= super().forward(
             src_tokens=src_tokens,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
             token_embeddings=token_embeddings,
             next_steps=next_steps.get_for_encoder())
+        # result["encoder_out"] .append(next_steps.logits)
+        return result|{"next_steps":next_steps}
         # next_steps=self.next_steps_classifier()(src_tokens,src_lengths,prev_output_tokens)
         # print("encoder next steps",next_steps.shape)
         #next_steps=NextSteps(next_steps)
