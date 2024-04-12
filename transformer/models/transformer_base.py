@@ -284,13 +284,14 @@ class TransformerStepsClassifier(TransformerModelBase):
         self.selective_layers=cfg.selective_layers
         self.total_layers=cfg.encoder.layers+cfg.decoder.layers
         self.num_options=cfg.options_each_layer
-        self.output_projection=nn.Linear(cfg.decoder.embed_dim, self.selective_layers*self.num_options,bias=False)
+        # self.adv_adoptive=torch.nn.Av
+        self.output_projection=nn.Linear(cfg.decoder.embed_dim, self.selective_layers*self.num_options*self.total_layers,bias=False)
     def output_layer(self,features):
         # features=features[:,0,:]
         
         # print("features",features.shape)
         # print("features---",features.shape)
-        out=self.output_projection(features)[:,:self.total_layers]
+        out=self.output_projection(features).mean(dim=1)
         # print("out",out.shape)
         
         batch_size=out.size(0)
