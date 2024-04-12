@@ -223,6 +223,8 @@ class NextSteps:
         self.index=index
         self.cfg=cfg
         self.encoder_decoder_cfg=encoder_decoder_cfg
+    def requires_grad_for_layer(self,index):
+        return True
     def get_for_encoder_attn(self):
         return NextStepsForEncoderAttn(self)
     def get_layers(self):
@@ -265,6 +267,8 @@ class GamblerNextSteps:
         return NextStepsForEncoderAttn(self)
     def get_layers(self):
         return self.encoder_decoder_cfg.classifier_layers
+    def requires_grad_for_layer(self,index):
+        return index>=self.encoder_decoder_cfg.transformer_layers
     def get_for_layer(self,index):
         return GamblerNextSteps(self.logit,self.cfg,self.encoder_decoder_cfg,index+self.index)
     def get_for_encoder(self):
@@ -354,21 +358,21 @@ class TransformerStepsClassifier(TransformerModelBase):
         # print("ff logits",next_steps.logit)
         # print(next_steps.logit,"next_steps.logit.shape")
         # print(next_steps.get_for_encoder().encoder_decoder_cfg is None,"next_steps.get_for_encoder().encoder_decoder_cfg")
-        with torch.no_grad():
-            encoder_out = self.encoder(
-                src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps.get_for_encoder()
-            )
-            # print("encoder_out",encoder_out["encoder_out"][0].shape)
-            decoder_out,_ = self.decoder(
-                prev_output_tokens,
-                encoder_out=encoder_out,
-                features_only=True,
-                alignment_layer=alignment_layer,
-                alignment_heads=alignment_heads,
-                src_lengths=src_lengths,
-                return_all_hiddens=return_all_hiddens,
-                next_steps=next_steps.get_for_decoder()
-            )
+        # with torch.no_grad():
+        encoder_out = self.encoder(
+            src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens,next_steps=next_steps.get_for_encoder()
+        )
+        # print("encoder_out",encoder_out["encoder_out"][0].shape)
+        decoder_out,_ = self.decoder(
+            prev_output_tokens,
+            encoder_out=encoder_out,
+            features_only=True,
+            alignment_layer=alignment_layer,
+            alignment_heads=alignment_heads,
+            src_lengths=src_lengths,
+            return_all_hiddens=return_all_hiddens,
+            next_steps=next_steps.get_for_decoder()
+        )
         # print("decoder_out",decoder_out.shape)
         if not features_only:
             decoder_out=self.output_layer(decoder_out)

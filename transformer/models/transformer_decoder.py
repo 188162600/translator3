@@ -396,29 +396,30 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
-            if isinstance(layer,SelectiveTransformerDecoderLayerBase):
-                x, layer_attn, _ = layer(
-                    x,
-                    enc,
-                    padding_mask,
-                    incremental_state,
-                    self_attn_mask=self_attn_mask,
-                    self_attn_padding_mask=self_attn_padding_mask,
-                    need_attn=bool((idx == alignment_layer)),
-                    need_head_weights=bool((idx == alignment_layer)),
-                    index=next_steps.get_for_layer(idx)
-                )
-            else:
-                x, layer_attn, _ = layer(
-                    x,
-                    enc,
-                    padding_mask,
-                    incremental_state,
-                    self_attn_mask=self_attn_mask,
-                    self_attn_padding_mask=self_attn_padding_mask,
-                    need_attn=bool((idx == alignment_layer)),
-                    need_head_weights=bool((idx == alignment_layer)),
-                )
+            with torch.set_grad_enabled(next_steps.requires_grad_for_layer(idx)):
+                if isinstance(layer,SelectiveTransformerDecoderLayerBase):
+                    x, layer_attn, _ = layer(
+                        x,
+                        enc,
+                        padding_mask,
+                        incremental_state,
+                        self_attn_mask=self_attn_mask,
+                        self_attn_padding_mask=self_attn_padding_mask,
+                        need_attn=bool((idx == alignment_layer)),
+                        need_head_weights=bool((idx == alignment_layer)),
+                        index=next_steps.get_for_layer(idx)
+                    )
+                else:
+                    x, layer_attn, _ = layer(
+                        x,
+                        enc,
+                        padding_mask,
+                        incremental_state,
+                        self_attn_mask=self_attn_mask,
+                        self_attn_padding_mask=self_attn_padding_mask,
+                        need_attn=bool((idx == alignment_layer)),
+                        need_head_weights=bool((idx == alignment_layer)),
+                    )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
                 attn = layer_attn.float().to(x)

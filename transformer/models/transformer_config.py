@@ -51,8 +51,8 @@ class EncDecBaseConfig(FairseqDataclass):
     classifier_layers:int=field(default=8,metadata={"help":"number of classifier layers"})
     transformer_layers:int=field(default=6,metadata={"help":"number of transformer layers"})
     
-    non_selective_layers: int = field(default=4, metadata={"help": "number of layers"})
-    selective_layers: int = field(default=4, metadata={"help": "number of non-shared layers"})
+    non_selective_layers: int = field(default=5, metadata={"help": "number of layers"})
+    selective_layers: int = field(default=3, metadata={"help": "number of non-shared layers"})
     
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
@@ -136,8 +136,8 @@ class TransformerConfig(FairseqDataclass):
         return max(self.encoder.fc1_selection_index,self.encoder.fc2_selection_index,self.encoder.self_attn_k_proj_selection_index,self.encoder.self_attn_v_proj_selection_index,self.encoder.self_attn_q_proj_selection_index,self.encoder.self_attn_out_proj_selection_index,
                    self.decoder.fc1_selection_index,self.decoder.fc2_selection_index,self.decoder.self_attn_k_proj_selection_index,self.decoder.self_attn_v_proj_selection_index,self.decoder.self_attn_q_proj_selection_index,self.decoder.self_attn_out_proj_selection_index,
                    self.decoder.encoder_attn_k_proj_selection_index,self.decoder.encoder_attn_v_proj_selection_index,self.decoder.encoder_attn_q_proj_selection_index,self.decoder.encoder_attn_out_proj_selection_index)+1
-    options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
-    total_options:int=field(default=4,metadata={"help":"total number of options"})
+    options_each_layer:int=field(default=3,metadata={"help":"number of options each layer"})
+    total_options:int=field(default=3,metadata={"help":"total number of options"})
     activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
         default="relu",
         metadata={"help": "activation function to use"},

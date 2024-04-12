@@ -272,12 +272,13 @@ class TransformerEncoderBase(FairseqEncoder):
         #print("index",index.shape,x.shape)
         
         for idx, layer in enumerate(self.layers[:next_steps.get_layers()]):
-            if isinstance(layer, SelectiveTransformerEncoderLayerBase):
-                lr = layer(
-                    x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps.get_for_layer(idx)
-                )
-            else:
-                lr = layer(x, encoder_padding_mask=encoder_padding_mask if has_pads else None)
+            with torch.set_grad_enabled(next_steps.requires_grad_for_layer(idx)):
+                if isinstance(layer, SelectiveTransformerEncoderLayerBase):
+                    lr = layer(
+                        x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps.get_for_layer(idx)
+                    )
+                else:
+                    lr = layer(x, encoder_padding_mask=encoder_padding_mask if has_pads else None)
 
             if isinstance(lr, tuple) and len(lr) == 2:
                 x, fc_result = lr
