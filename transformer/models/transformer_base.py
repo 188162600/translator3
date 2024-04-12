@@ -335,7 +335,9 @@ class TransformerStepsClassifier(TransformerModelBase):
         
         
         batch_size=out.size(0)
-        return NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
+        out=out.view(batch_size, self.total_layers,self.selective_layers,self.num_options)
+        out=torch.softmax(out,dim=-1)
+        return NextSteps( out,self.cfg)
     def set_last_loss(self, loss):
         #loss=loss.detach()
         #  def set_last_loss(self, loss):
