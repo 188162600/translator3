@@ -247,6 +247,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         # will become -inf, which results in NaN in model parameters
         #print(index)
         # print("x",x.shape,"index",index.shape)
+        assert index is not None
         if attn_mask is not None:
             attn_mask = attn_mask.masked_fill(
                 attn_mask.to(torch.bool), -1e8 if x.dtype == torch.float32 else -1e4

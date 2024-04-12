@@ -5,7 +5,7 @@
 
 import math
 from typing import Any, Dict, List, Optional
-
+from ..models.next_steps import NextSteps
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -58,8 +58,8 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
             (default: False).
     """
-    def set_last_loss(self, loss):
-        self.next_steps_classifier.set_last_loss(loss)
+    # def set_last_loss(self, loss):
+    #     self.next_steps_classifier.set_last_loss(loss)
     # def set_classifier_requires_grad(self,requires_grad):
     #     self.next_steps_classifier_requires_grad=requires_grad
     # def set_epoch(self, epoch):
@@ -100,7 +100,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         if not cfg.adaptive_input and cfg.quant_noise.pq > 0:
             self.quant_noise = apply_quant_noise_(
-                 torch.nn.Linear(embed_dim, embed_dim, bias=False),
+                 Linear(embed_dim, embed_dim, bias=False),
                 cfg.quant_noise.pq,
                 cfg.quant_noise.pq_block_size,
             )
@@ -108,7 +108,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.quant_noise = None
 
         self.project_in_dim = (
-            torch.nn.Linear(input_embed_dim, embed_dim, bias=False)
+            Linear(input_embed_dim, embed_dim, bias=False)
             if embed_dim != input_embed_dim
             else None
         )
@@ -178,7 +178,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             )
         elif self.share_input_output_embed:
            
-            self.output_projection = torch.nn.Linear(
+            self.output_projection = Linear(
                 #self.cfg.decoder.num_options,
                 self.embed_tokens.weight.shape[1],
                 self.embed_tokens.weight.shape[0],
@@ -513,14 +513,64 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             state_dict[version_key] = torch.Tensor([1])
 
         return state_dict
+class TransformerDecoder(TransformerDecoderBase):
+    def __init__(
+        self,
+        cfg,
+        dictionary,
+        embed_tokens,
+        no_encoder_attn=False,
+        output_projection=None,
+        
+    ):
+        #self.args = args
+        super().__init__(
+            cfg,
+            dictionary,
+            embed_tokens,
+            no_encoder_attn=no_encoder_attn,
+            output_projection=output_projection,
+        )
+        self.next_steps_classifier=None
+    # @torch.jit.ignore
+    def forward( self,
+        prev_output_tokens,
+        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
+        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
+        features_only: bool = False,
+        full_context_alignment: bool = False,
+        alignment_layer: Optional[int] = None,
+        alignment_heads: Optional[int] = None,
+        src_lengths: Optional[Any] = None,
+        return_all_hiddens: bool = False):
+        # print(encoder_out.keys(),"key2")
+        # print(encoder_out.keys(),"key2","requirs_grad",encoder_out["encoder_out"][0].requires_grad)
+        # next_steps= encoder_out["next_steps"][0]
+        next_steps=self.next_steps_classifier().previous_steps
+   
+        out= super().forward(
+            prev_output_tokens,
+            encoder_out=encoder_out,
+            incremental_state=incremental_state,
+            features_only=features_only,
+            full_context_alignment=full_context_alignment,
+            alignment_layer=alignment_layer,
+            alignment_heads=alignment_heads,
+            src_lengths=src_lengths,
+            return_all_hiddens=return_all_hiddens,
+            next_steps=NextSteps( next_steps,self.cfg).get_for_decoder()
+        )
+        self.next_steps_classifier.previous_steps=None
+        return out
+    
+    
 
-
-# def Linear(in_features, out_features, bias=True):
-#     m = nn.Linear(in_features, out_features, bias)
-#     nn.init.xavier_uniform_(m.weight)
-#     if bias:
-#         nn.init.constant_(m.bias, 0.0)
-#     return m
+def Linear(in_features, out_features, bias=True):
+    m = nn.Linear(in_features, out_features, bias)
+    nn.init.xavier_uniform_(m.weight)
+    if bias:
+        nn.init.constant_(m.bias, 0.0)
+    return m
 
 
 # class TransformerDecoder(TransformerDecoderBase):
