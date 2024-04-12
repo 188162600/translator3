@@ -87,11 +87,21 @@ class SelectiveLinear(Module):
         if self.batch_index != 0:
             x = x.transpose(0, self.batch_index)
         
+        transformed = torch.einsum('nij,baj->bani', self.weights, x)
+        # transformed=self.activation(transformed)
+        # # transformed=self.activation(transformed)
+
+        # # Compute the weighted sum of biases using the selection probabilities
+        # weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
+        # weighted_biases = self.activation(weighted_biases)
+        # # weighted_biases = self.activation(weighted_biases)
+        # # Sum the outputs using the selection probabilities to get the final output
+        final_output = torch.einsum('bani,bn->bai', transformed, selection_probs)
+        # weighted_weight = torch.einsum('nij,bn->bij', self.weight, selection_probs)
        
-        weighted_weight = torch.einsum('nij,bn->bij', self.weight, selection_probs)
        
-       
-        final_output = torch.einsum('bij,bnj->bni', weighted_weight, x)
+        # final_output = torch.einsum('bij,bnj->bni', weighted_weight, x)
+        
         
         
         if self.bias is not None:

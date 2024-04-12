@@ -54,8 +54,13 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
     def set_last_loss(self, loss):
         #loss=loss.detach()
         #  def set_last_loss(self, loss):
-      
-        self.next_steps_classifier.set_last_loss(loss)
+        
+        
+        if torch.is_grad_enabled():
+            (torch.sum(self.previous_steps)*loss.detach() ).backward()
+            self.previous_steps=None
+        if hasattr(self.next_steps_classifier,"set_last_loss"):
+            self.next_steps_classifier.set_last_loss(loss)
         
     @classmethod
     def add_args(cls, parser):
@@ -336,12 +341,7 @@ class TransformerStepsClassifier(TransformerModelBase):
         
         batch_size=out.size(0)
         return NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
-    def set_last_loss(self, loss):
-        
-        if torch.is_grad_enabled():
-            (torch.sum(self.previous_steps)*loss.detach() ).backward()
-            self.previous_steps=None
-       
+   
     def forward(
         self,
         src_tokens,
