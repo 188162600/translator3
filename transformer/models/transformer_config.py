@@ -32,6 +32,12 @@ def _get_total_options(sharing_method:str,num_total,num_shared,num_non_shared,nu
 from fairseq.dataclass import FairseqDataclass
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
+    fc1_selection_index:int=0
+    fc2_selection_index:int=1
+    self_attn_k_proj_selection_index:int=2
+    self_attn_v_proj_selection_index:int=3
+    self_attn_q_proj_selection_index:int=4
+    self_attn_out_proj_selection_index:int=5
     
     embed_path: Optional[str] = field(
         default=None, metadata={"help": "path to pre-trained embedding"}
@@ -42,8 +48,12 @@ class EncDecBaseConfig(FairseqDataclass):
     ffn_embed_dim: int = field(
         default=2048, metadata={"help": "embedding dimension for FFN"}
     )
-    classifier_layers:int=field(default=3,metadata={"help":"number of classifier layers"})
-    layers: int = field(default=6, metadata={"help": "number of layers"})
+    classifier_layers:int=field(default=8,metadata={"help":"number of classifier layers"})
+    transformer_layers:int=field(default=6,metadata={"help":"number of transformer layers"})
+    
+    non_selective_layers: int = field(default=4, metadata={"help": "number of layers"})
+    selective_layers: int = field(default=4, metadata={"help": "number of non-shared layers"})
+    
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
     )
@@ -71,7 +81,17 @@ class DecoderConfig(EncDecBaseConfig):
     # classifier_layers:int = field(
     #     default=2,metadata={"help":"number of classifier layers"}
     # )
-  
+    fc1_selection_index:int=6
+    fc2_selection_index:int=7
+    self_attn_k_proj_selection_index:int=8
+    self_attn_v_proj_selection_index:int=9
+    self_attn_q_proj_selection_index:int=10
+    self_attn_out_proj_selection_index:int=11
+    encoder_attn_k_proj_selection_index:int=12
+    encoder_attn_v_proj_selection_index:int=13
+    encoder_attn_q_proj_selection_index:int=14
+    encoder_attn_out_proj_selection_index:int=15
+    
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
         default=II("model.decoder.embed_dim"),
@@ -111,7 +131,13 @@ class QuantNoiseConfig(FairseqDataclass):
 
 @dataclass
 class TransformerConfig(FairseqDataclass):
+    @property
+    def selective_layers(self):
+        return max(self.encoder.fc1_selection_index,self.encoder.fc2_selection_index,self.encoder.self_attn_k_proj_selection_index,self.encoder.self_attn_v_proj_selection_index,self.encoder.self_attn_q_proj_selection_index,self.encoder.self_attn_out_proj_selection_index,
+                   self.decoder.fc1_selection_index,self.decoder.fc2_selection_index,self.decoder.self_attn_k_proj_selection_index,self.decoder.self_attn_v_proj_selection_index,self.decoder.self_attn_q_proj_selection_index,self.decoder.self_attn_out_proj_selection_index,
+                   self.decoder.encoder_attn_k_proj_selection_index,self.decoder.encoder_attn_v_proj_selection_index,self.decoder.encoder_attn_q_proj_selection_index,self.decoder.encoder_attn_out_proj_selection_index)+1
     options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
+    total_options:int=field(default=4,metadata={"help":"total number of options"})
     activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
         default="relu",
         metadata={"help": "activation function to use"},

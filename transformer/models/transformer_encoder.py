@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from ..nn.selective_transformer_layer import SelectiveTransformerEncoderLayerBase
+from fairseq.modules.transformer_layer import TransformerEncoderLayerBase
 from ..nn.confidence_loss import confidence_loss
 from fairseq import utils
 from fairseq.distributed import fsdp_wrap
@@ -109,7 +110,10 @@ class TransformerEncoderBase(FairseqEncoder):
         #         for i in range(cfg.encoder.layers)
         #     ]
         self.layers.extend(
-            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)]
+            [self.build_selective_encoder_layer(cfg) for i in range(cfg.encoder.selective_layers)]
+        )
+        self.layers.extend(
+            [self.build_non_selective_encoder_layer(cfg) for i in range(cfg.encoder.non_selective_layers)]
         )
         self.num_layers = len(self.layers)
 
@@ -119,7 +123,7 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = None
         #self.set_classifier_requires_grad(True)
 
-    def build_encoder_layer(self, cfg):
+    def build_selective_encoder_layer(self, cfg):
         
         layer = SelectiveTransformerEncoderLayerBase(
             cfg, return_fc=self.return_fc
@@ -134,6 +138,18 @@ class TransformerEncoderBase(FairseqEncoder):
         min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
         layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
         return layer
+    def build_non_selective_encoder_layer(self, cfg):
+        layer=TransformerEncoderLayerBase(cfg)
+        checkpoint = cfg.checkpoint_activations
+        if checkpoint:
+            offload_to_cpu = cfg.offload_activations
+            layer = checkpoint_wrapper(layer, offload_to_cpu=offload_to_cpu)
+        # if we are checkpointing, enforce that FSDP always wraps the
+        # checkpointed layer, regardless of layer size
+        min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
+        layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
+        return layer
+        
 
     def forward_embedding(
         self, src_tokens, token_embedding: Optional[torch.Tensor] = None
@@ -255,11 +271,13 @@ class TransformerEncoderBase(FairseqEncoder):
         # encoder layers
         #print("index",index.shape,x.shape)
         
-        for idx, layer in enumerate( self.layers):
-            
-            lr = layer(
-                x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps.get_for_layer(idx)
-            )
+        for idx, layer in enumerate(self.layers[:next_steps.get_layers()]):
+            if isinstance(layer, SelectiveTransformerEncoderLayerBase):
+                lr = layer(
+                    x, encoder_padding_mask=encoder_padding_mask if has_pads else None,index=next_steps.get_for_layer(idx)
+                )
+            else:
+                lr = layer(x, encoder_padding_mask=encoder_padding_mask if has_pads else None)
 
             if isinstance(lr, tuple) and len(lr) == 2:
                 x, fc_result = lr

@@ -10,12 +10,12 @@ import torch.nn as nn
 from torch import Tensor
 from ..nn.selective_linear import SelectiveLinear
 from ..nn.quant_noise import quant_noise
+from ..nn.selective_multihead_attention import SelectiveMultiheadAttention
 
 from fairseq import utils
 from fairseq.models.transformer import TransformerConfig
-from fairseq.modules import LayerNorm, MultiheadAttention
 from fairseq.modules.fairseq_dropout import FairseqDropout
-
+from fairseq.modules import LayerNorm
 import fairseq.modules.transformer_layer as fairseq_transformer_layer
 
 class SelectiveTransformerEncoderLayerBase(nn.Module):
@@ -56,6 +56,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.normalize_before = cfg.encoder.normalize_before
         #self.num_options = cfg.encoder.num_options
         self.fc1 = self.build_fc1(
+            cfg.total_options,
             cfg.options_each_layer,
             self.embed_dim,
             cfg.encoder.ffn_embed_dim,
@@ -63,6 +64,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
+            cfg.total_options,
             cfg.options_each_layer,
             cfg.encoder.ffn_embed_dim,
             self.embed_dim,
@@ -97,14 +99,14 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
     #     return quant_noise(
     #         nn.Linear(input_dim, output_dim), p=q_noise, block_size=qn_block_size
     #     )
-    def build_fc1(self,num_options, input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size):
         return quant_noise(
-            SelectiveLinear(num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
         )
 
-    def build_fc2(self, num_options,input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc2(self, total_options,num_options,input_dim, output_dim, q_noise, qn_block_size):
         return quant_noise(
-            SelectiveLinear(num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
         )
 
     def _get_fc_rank(self, remove_num: int) -> List[int]:
@@ -134,6 +136,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         new_fc1_bias.requires_grad = True
 
         self.fc1=self.build_fc1(
+        
            self.fc1.num_options,
             self.fc1.in_features-len(remove_index),
             self.fc1.out_features,
@@ -178,7 +181,17 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.fc2.bias = torch.nn.Parameter(new_fc2_bias)
 
     def build_self_attention(self, embed_dim, cfg):
-        return MultiheadAttention(
+    
+        return SelectiveMultiheadAttention(
+            
+            cfg.total_options if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.total_options if cfg.encoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.encoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.total_options if cfg.encoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.encoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.total_options if cfg.encoder.self_attn_out_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.encoder.self_attn_out_proj_selection_index is not None else None,
             embed_dim,
             cfg.encoder.attention_heads,
             dropout=cfg.attention_dropout,
@@ -210,8 +223,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         x,
         encoder_padding_mask: Optional[Tensor],
         attn_mask: Optional[Tensor] = None,
-        *,
-        index
+        index=None
     ):
         """
         Args:
@@ -234,6 +246,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         # the attention weight (before softmax) for some padded element in query
         # will become -inf, which results in NaN in model parameters
         #print(index)
+        # print("x",x.shape,"index",index.shape)
         if attn_mask is not None:
             attn_mask = attn_mask.masked_fill(
                 attn_mask.to(torch.bool), -1e8 if x.dtype == torch.float32 else -1e4
@@ -249,6 +262,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             key_padding_mask=encoder_padding_mask,
             need_weights=False,
             attn_mask=attn_mask,
+            index=index
         )
         x = self.dropout_module(x)
         x = self.residual_connection(x, residual)
@@ -583,14 +597,17 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         )
 
         self.fc1 = self.build_fc1(
-            cfg.options_each_layer,
+            
+            cfg.total_options if cfg.decoder.fc1_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.fc1_selection_index is not None else None,
             self.embed_dim,
             cfg.decoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.options_each_layer,
+            cfg.total_options if cfg.decoder.fc2_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.fc2_selection_index is not None else None,
             cfg.decoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,
@@ -625,20 +642,29 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
 
     # def build_fc2(self, input_dim, output_dim, q_noise, qn_block_size):
     #     return quant_noise(nn.Linear(input_dim, output_dim), q_noise, qn_block_size)
-    def build_fc1(self,num_options, input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size):
         return quant_noise(
-            SelectiveLinear(num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
         )
 
-    def build_fc2(self, num_options,input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc2(self,total_options, num_options,input_dim, output_dim, q_noise, qn_block_size):
         return quant_noise(
-            SelectiveLinear(num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
         )
         
     def build_self_attention(
         self, embed_dim, cfg, add_bias_kv=False, add_zero_attn=False
     ):
-        return MultiheadAttention(
+        return SelectiveMultiheadAttention(
+            
+            cfg.total_options if cfg.decoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.total_options if cfg.decoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.total_options if cfg.decoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.total_options if cfg.decoder.self_attn_out_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.self_attn_out_proj_selection_index is not None else None,
             embed_dim,
             cfg.decoder.attention_heads,
             dropout=cfg.attention_dropout,
@@ -651,7 +677,17 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
         )
 
     def build_encoder_attention(self, embed_dim, cfg):
-        return MultiheadAttention(
+      
+        return SelectiveMultiheadAttention(
+           
+            cfg.total_options if cfg.decoder.encoder_attn_k_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.encoder_attn_k_proj_selection_index is not None else None,
+            cfg.total_options if cfg.decoder.encoder_attn_v_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.encoder_attn_v_proj_selection_index is not None else None,
+            cfg.total_options if cfg.decoder.encoder_attn_q_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.encoder_attn_q_proj_selection_index is not None else None,
+            cfg.total_options if cfg.decoder.encoder_attn_out_proj_selection_index is not None else None,
+            cfg.options_each_layer if cfg.decoder.encoder_attn_out_proj_selection_index is not None else None,
             embed_dim,
             cfg.decoder.attention_heads,
             kdim=cfg.encoder.embed_dim,
@@ -747,6 +783,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             incremental_state=incremental_state,
             need_weights=False,
             attn_mask=self_attn_mask,
+            index=index
         )
         if self.c_attn is not None:
             tgt_len, bsz = x.size(0), x.size(1)
@@ -784,6 +821,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
                 static_kv=True,
                 need_weights=need_attn or (not self.training and self.need_attn),
                 need_head_weights=need_head_weights,
+                index=index.get_for_encoder_attn()
             )
             x = self.dropout_module(x)
             x = self.residual_connection(x, residual)

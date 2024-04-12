@@ -15,7 +15,10 @@ from fairseq.distributed import fsdp_wrap
 from fairseq.models import FairseqIncrementalDecoder
 
 from ..nn.selective_linear import SelectiveLinear
-from ..nn import selective_transformer_layer
+
+from ..nn.selective_transformer_layer import SelectiveTransformerDecoderLayerBase
+from fairseq.modules.transformer_layer import TransformerDecoderLayerBase
+
 from ..nn.confidence_loss import confidence_loss
 
 from ..models.transformer_config import TransformerConfig
@@ -133,8 +136,14 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         #shared_layer=self.build_decoder_layer(cfg, no_encoder_attn)
         self.layers.extend(
             [
-                self.build_decoder_layer(cfg, no_encoder_attn)
-                for _ in range(cfg.decoder.layers)
+                self.build_selective_decoder_layer(cfg, no_encoder_attn)
+                for _ in range(cfg.decoder.selective_layers)
+            ]
+        )
+        self.layers.extend(
+            [
+                self.build_non_selective_decoder_layer(cfg, no_encoder_attn)
+                for _ in range(cfg.decoder.non_selective_layers)
             ]
         )
         self.num_layers = len(self.layers)
@@ -193,8 +202,19 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 BaseLayer(cfg),
             )
 
-    def build_decoder_layer(self, cfg, no_encoder_attn=False):
-        layer = selective_transformer_layer.SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn)
+    def build_selective_decoder_layer(self, cfg, no_encoder_attn=False):
+        layer = SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn)
+        checkpoint = cfg.checkpoint_activations
+        if checkpoint:
+            offload_to_cpu = cfg.offload_activations
+            layer = checkpoint_wrapper(layer, offload_to_cpu=offload_to_cpu)
+        # if we are checkpointing, enforce that FSDP always wraps the
+        # checkpointed layer, regardless of layer size
+        min_params_to_wrap = cfg.min_params_to_wrap if not checkpoint else 0
+        layer = fsdp_wrap(layer, min_num_params=min_params_to_wrap)
+        return layer
+    def build_non_selective_decoder_layer(self, cfg, no_encoder_attn=False):
+        layer = TransformerDecoderLayerBase(cfg, no_encoder_attn)
         checkpoint = cfg.checkpoint_activations
         if checkpoint:
             offload_to_cpu = cfg.offload_activations
@@ -246,7 +266,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment=full_context_alignment,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
-            index=next_steps
+            next_steps=next_steps
         )
         #print("forward index",index.shape)
         if not features_only:
@@ -270,7 +290,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
-        index=...  
+        next_steps=...  
     ):
         return self.extract_features_scriptable(
             prev_output_tokens,
@@ -279,7 +299,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             full_context_alignment,
             alignment_layer,
             alignment_heads,
-            index=index
+            next_steps=next_steps
         )
 
     """
@@ -297,7 +317,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
     
-        index=...
+        next_steps=...
     ):
         """
         Similar to *forward* but only return features.
@@ -318,7 +338,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        assert index is not ...
+        assert next_steps is not ...
         bs, slen = prev_output_tokens.size()
         if alignment_layer is None:
             alignment_layer = self.num_layers - 1
@@ -371,23 +391,34 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
-        for idx, layer in enumerate(self.layers):
+        for idx, layer in enumerate(self.layers[: next_steps.get_layers()]):
             if incremental_state is None and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
-
-            x, layer_attn, _ = layer(
-                x,
-                enc,
-                padding_mask,
-                incremental_state,
-                self_attn_mask=self_attn_mask,
-                self_attn_padding_mask=self_attn_padding_mask,
-                need_attn=bool((idx == alignment_layer)),
-                need_head_weights=bool((idx == alignment_layer)),
-                index=index.get_for_layer(idx)
-            )
+            if isinstance(layer,SelectiveTransformerDecoderLayerBase):
+                x, layer_attn, _ = layer(
+                    x,
+                    enc,
+                    padding_mask,
+                    incremental_state,
+                    self_attn_mask=self_attn_mask,
+                    self_attn_padding_mask=self_attn_padding_mask,
+                    need_attn=bool((idx == alignment_layer)),
+                    need_head_weights=bool((idx == alignment_layer)),
+                    index=next_steps.get_for_layer(idx)
+                )
+            else:
+                x, layer_attn, _ = layer(
+                    x,
+                    enc,
+                    padding_mask,
+                    incremental_state,
+                    self_attn_mask=self_attn_mask,
+                    self_attn_padding_mask=self_attn_padding_mask,
+                    need_attn=bool((idx == alignment_layer)),
+                    need_head_weights=bool((idx == alignment_layer)),
+                )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
                 attn = layer_attn.float().to(x)
