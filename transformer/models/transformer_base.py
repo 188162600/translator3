@@ -61,7 +61,12 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         #loss=loss.detach()
         #  def set_last_loss(self, loss):
         
-        self.next_steps_classifier.set_last_loss(loss)
+        
+        if torch.is_grad_enabled():
+            (torch.sum(self.previous_steps)*loss.detach() ).backward()
+            self.previous_steps=None
+        if hasattr(self.next_steps_classifier,"set_last_loss"):
+            self.next_steps_classifier.set_last_loss(loss)
         
     @classmethod
     def add_args(cls, parser):
@@ -177,8 +182,13 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         which are not supported by TorchScript.
         """
         
+<<<<<<< HEAD
         # next_steps=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
         # self.previous_steps=next_steps.logits.clone() 
+=======
+        next_steps=self.next_steps_classifier(src_tokens, src_lengths, prev_output_tokens)
+      
+>>>>>>> parent of 0a859dc (Update transformer_base.py)
         encoder_out = self.encoder(
             src_tokens, src_lengths=src_lengths, return_all_hiddens=return_all_hiddens
         )
@@ -348,6 +358,7 @@ class TransformerStepsClassifier(TransformerModelBase):
         
         
         batch_size=out.size(0)
+<<<<<<< HEAD
         print(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options).shape ,"classifier_out")
         self.previous_steps= NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
         return self.previous_steps
@@ -358,6 +369,10 @@ class TransformerStepsClassifier(TransformerModelBase):
         self.next_steps_classifier.set_last_loss(loss)
       
        
+=======
+        return NextSteps(out.view(batch_size, self.total_layers,self.selective_layers,self.num_options) ,self.cfg)
+   
+>>>>>>> parent of 0a859dc (Update transformer_base.py)
     def forward(
         self,
         src_tokens,
