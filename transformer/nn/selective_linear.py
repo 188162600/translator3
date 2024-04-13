@@ -90,10 +90,14 @@ class SelectiveLinear(Module):
     def forward(self, x, selection_probs):
         # print("selection_logits",selection_logits.shape,"x shape",x.shape)
         # print(self.num_options,self.total_options,self.is_non_selective)
+        
         if self.is_non_selective:
             # print("non selective")
             return torch.nn.functional.linear(x, self.weight, self.bias)
         if selection_probs is None:
+            assert self.default_index is not None
+            # print("selection_probs is None")
+            # print("default_index",self.default_index,"weight",self.weight.shape,"bias",self.bias.shape,"x",x.shape)
             return torch.nn.functional.linear(x, self.weight[self.default_index], self.bias[self.default_index])
         if selection_probs.dim()==1:
             return self.forward_unbatched_logits(x, selection_probs)

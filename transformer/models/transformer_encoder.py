@@ -110,7 +110,7 @@ class TransformerEncoderBase(FairseqEncoder):
         #         for i in range(cfg.encoder.layers)
         #     ]
         self.layers.extend(
-            [self.build_selective_encoder_layer(cfg) for i in range(cfg.encoder.selective_layers)]
+            [self.build_selective_encoder_layer(cfg,index) for index in range(cfg.encoder.selective_layers)]
         )
         # self.layers.extend(
         #     [self.build_non_selective_encoder_layer(cfg) for i in range(cfg.encoder.non_selective_layers)]
@@ -137,7 +137,7 @@ class TransformerEncoderBase(FairseqEncoder):
         if self.cfg.encoder.sharing_method=="all":
             return
         elif self.cfg.encoder.sharing_method=="none":
-            for i in range(1,len(self.layers)):
+            for i in range(0,len(self.layers)):
                 if self.cfg.encoder.fc1_selection_index is not None:
                     self.layers[i].fc1.fill_with_default_index()
                     self.layers[i].default_index=None
@@ -156,34 +156,48 @@ class TransformerEncoderBase(FairseqEncoder):
                 if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
                     self.layers[i].self_attn.out_proj.fill_with_default_index()
                     self. layers[i].default_index=None
+           
                
                     
         
     def build_sharing(self,method):
         if method=="none":
-            return
+            for i in range(0,len(self.layers)):
+                self.layers[i].fc1.default_index=0
+                self.layers[i].fc2.default_index=0
+                self .layers[i].self_attn.k_proj.default_index=0
+                self.layers[i].self_attn.v_proj.default_index=0
+                self.layers[i].self_attn.q_proj.default_index=0
+                self.layers[i].self_attn.out_proj.default_index=0
+                
         if method=="all":
             base_layer=self.layers[0]
             for i in range(1,len(self.layers)):
                 if self.cfg.encoder.fc1_selection_index is not None:
                     self.layers[i].fc1=base_layer.fc1
+                    
                 if self.cfg.encoder.fc2_selection_index is not None:
                     self.layers[i].fc2=base_layer.fc2
+                   
                 if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
                     self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                  
                 if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
                     self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                   
                 if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
                     self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                   
                 if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
                     self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
+                    
              
                 
                 
-    def build_selective_encoder_layer(self, cfg):
+    def build_selective_encoder_layer(self, cfg,index):
         
         layer = SelectiveTransformerEncoderLayerBase(
-            cfg, return_fc=self.return_fc
+            cfg, return_fc=self.return_fc,index=index
         )
         #transformer_layer.TransformerEncoderLayerBase.forward()
         checkpoint = cfg.checkpoint_activations

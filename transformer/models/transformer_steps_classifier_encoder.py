@@ -381,6 +381,7 @@ class NextStepsForEncoderAttn:
         return self.instance.get_for_encoder_attn_out_proj()
 class NextSteps:
     def __init__(self,logits,cfg,encoder_decoder_cfg=None,index=0) -> None:
+        # print("next steps",logits.shape if logits is not None else None)
         self.logits=logits
         self.index=index
         self.cfg=cfg
@@ -452,6 +453,7 @@ class TransformerStepsClassifier(torch.nn.Module):
         self.classifier_layer = nn.Linear(cfg.encoder.embed_dim,self.encoder_decoder_layers*self.total_options*self.selective_layers)
         self.classifier_cfg = classifier_cfg
         self.enable=classifier_cfg.enable_classifier
+        # print("classifier enable",self.enable)
         
     def output_layer(self,features:Tensor):
         # print("features",features.shape)
@@ -469,8 +471,9 @@ class TransformerStepsClassifier(torch.nn.Module):
     #     print("classifier enable",self.enable)
         
     def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
+        # print("enable" ,self.enable)
         if not self.enable:
-            NextSteps(None,self.cfg)
+            return NextSteps(None,self.cfg)
         prev_encoder_out=previous_encode["encoder_out"][0] if previous_encode is not None else None
         encoder_mask=previous_encode["encoder_padding_mask"][0] if previous_encode is not None else None
         out=self.encoder(src_tokens,src_lengths,previous_encode=prev_encoder_out,padding_mask=encoder_mask)

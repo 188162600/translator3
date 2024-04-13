@@ -40,7 +40,8 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.embed_dim = cfg.encoder.embed_dim
         self.quant_noise = cfg.quant_noise.pq
         self.quant_noise_block_size = cfg.quant_noise.pq_block_size
-        self.self_attn = self.build_self_attention(self.embed_dim, cfg)
+        print("SelectiveTransformerEncoderLayerBase index",index)
+        self.self_attn = self.build_self_attention(self.embed_dim, cfg,index=index)
         self.self_attn_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
         self.dropout_module = FairseqDropout(
             cfg.dropout, module_name=self.__class__.__name__
@@ -183,8 +184,8 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.fc2.weight = torch.nn.Parameter(new_fc2_weight)
         self.fc2.bias = torch.nn.Parameter(new_fc2_bias)
 
-    def build_self_attention(self, embed_dim, cfg):
-    
+    def build_self_attention(self, embed_dim, cfg,index):
+        print("index self att",index)
         return SelectiveMultiheadAttention(
             cfg.encoder.total_options if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
             cfg.encoder.options_each_layer if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
@@ -201,6 +202,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             q_noise=self.quant_noise,
             qn_block_size=self.quant_noise_block_size,
             xformers_att_config=cfg.encoder.xformers_att_config,
+            index=index
         )
 
     def residual_connection(self, x, residual):
@@ -581,7 +583,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             self.encoder_attn = None
             self.encoder_attn_layer_norm = None
         else:
-            self.encoder_attn = self.build_encoder_attention(self.embed_dim, cfg)
+            self.encoder_attn = self.build_encoder_attention(self.embed_dim, cfg,index)
             self.encoder_attn_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
 
         self.ffn_layernorm = (
@@ -683,7 +685,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             index=index
         )
 
-    def build_encoder_attention(self, embed_dim, cfg):
+    def build_encoder_attention(self, embed_dim, cfg,index):
       
         return SelectiveMultiheadAttention(
            
@@ -704,6 +706,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             q_noise=self.quant_noise,
             qn_block_size=self.quant_noise_block_size,
             xformers_att_config=cfg.encoder.xformers_att_config,
+            index=index
         )
 
     def prepare_for_onnx_export_(self):

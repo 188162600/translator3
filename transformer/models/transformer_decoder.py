@@ -137,9 +137,9 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
        
         self.layers.extend(
             [
-                self.build_selective_decoder_layer(cfg, no_encoder_attn)
+                self.build_selective_decoder_layer(cfg, no_encoder_attn,index=index)
                 # shared_layer
-                for _ in range(cfg.decoder.selective_layers)
+                for index in range(cfg.decoder.selective_layers)
             ]
         )
         # self.layers.extend(
@@ -216,7 +216,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         if self.cfg.decoder.sharing_method=="all":
             return
         elif self.cfg.decoder.sharing_method=="none":
-            for i in range(1,len(self.layers)):
+            for i in range(0,len(self.layers)):
                 if self.cfg.decoder.fc1_selection_index is not None:
                     self.layers[i].fc1.fill_with_default_index()
                     self.layers[i].fc1.default_index=None
@@ -256,36 +256,58 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             
     def build_sharing(self,method):
         if method=="none":
-            return
+            for i in range(0,len(self.layers)):
+                self.layers[i].fc1.default_index=0
+                self.layers[i].fc2.default_index=0
+                self.layers[i].self_attn.k_proj.default_index=0
+                self.layers[i].self_attn.v_proj.default_index=0
+                self.layers[i].self_attn.q_proj.default_index=0
+                self.layers[i].self_attn.out_proj.default_index=0
+                if self.layers[i].encoder_attn is not None:
+                    self.layers[i].encoder_attn.k_proj.default_index=0
+                    self.layers[i].encoder_attn.v_proj.default_index=0
+                    self.layers[i].encoder_attn.q_proj.default_index=0
+                    self.layers[i].encoder_attn.out_proj.default_index=0
+                    
         elif method=="all":
             base_layer=self.layers[0]
             for i in range(1,len(self.layers)):
                 if self.cfg.decoder.fc1_selection_index is not None:
                     self.layers[i].fc1=base_layer.fc1
+                  
                 if self.cfg.decoder.fc2_selection_index is not None:
                     self.layers[i].fc2=base_layer.fc2
+                   
                 if self.cfg.decoder.self_attn_k_proj_selection_index is not None:
                     self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                  
                 if self.cfg.decoder.self_attn_v_proj_selection_index is not None:
                     self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                   
                 if self.cfg.decoder.self_attn_q_proj_selection_index is not None:
                     self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                    
                 if self.cfg.decoder.self_attn_out_proj_selection_index is not None:
                     self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
+                   
                 if base_layer.encoder_attn is not None:
                     if self.cfg.decoder.encoder_attn_k_proj_selection_index is not None:
                         self.layers[i].encoder_attn.k_proj=base_layer.encoder_attn.k_proj
+                     
                     if self.cfg.decoder.encoder_attn_v_proj_selection_index is not None:
                         self.layers[i].encoder_attn.v_proj=base_layer.encoder_attn.v_proj
+                      
                     if self.cfg.decoder.encoder_attn_q_proj_selection_index is not None:
                         self.layers[i].encoder_attn.q_proj=base_layer.encoder_attn.q_proj
+                       
                     if self.cfg.decoder.encoder_attn_out_proj_selection_index is not None:
                         self.layers[i].encoder_attn.out_proj=base_layer.encoder_attn.out_proj
+                       
         else:
             
             raise NotImplementedError("sharing method not implemented")
-    def build_selective_decoder_layer(self, cfg, no_encoder_attn=False):
-        layer = SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn)
+    def build_selective_decoder_layer(self, cfg, no_encoder_attn=False,index=None):
+        layer = SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn,index=index)
         checkpoint = cfg.checkpoint_activations
         if checkpoint:
             offload_to_cpu = cfg.offload_activations
