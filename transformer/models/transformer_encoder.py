@@ -123,7 +123,14 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = None
         # self.next_steps_classifier =torch.nn.Module()
         #self.set_classifier_requires_grad(True)
-
+        self.build_sharing(cfg.encoder.sharing)
+    def build_sharing(self,method):
+        if method=="none":
+            return
+        if method=="all":
+            base_layer=self.layers[0]
+            for i in range(1,len(self.layers)):
+                self.layers[i]=base_layer
     def build_selective_encoder_layer(self, cfg):
         
         layer = SelectiveTransformerEncoderLayerBase(

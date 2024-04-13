@@ -300,6 +300,21 @@ def transformer_iwslt_de_en(args):
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de")
 def transformer_wmt_en_de(args):
     base_architecture(args)
+    
+@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_shared")
+def transformer_wmt_en_de(args):
+    args.encoder_options_each_layer=10
+    args.encoder_total_options=10
+    args.encoder_sharing_method="all"
+    args.decoder_options_each_layer=10
+    args.decoder_total_options=10
+    args.decoder_sharing_method="all"
+    
+    base_architecture(args)
+    
+    #   options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
+    # total_options:int=field(default=4,metadata={"help":"total number of options"}) 
+
 
 
 # parameters used in the "Attention Is All You Need" paper (Vaswani et al., 2017)

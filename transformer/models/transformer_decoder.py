@@ -166,6 +166,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         if self.output_projection is None:
             self.build_output_projection(cfg, dictionary, embed_tokens)
         # self.set_classifier_requires_grad(True)
+        self.build_sharing(cfg.decoder.sharing_method)
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -203,7 +204,13 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 ((i + 1) * cfg.decoder.layers) // (num_base_layers + 1),
                 BaseLayer(cfg),
             )
-
+    def build_sharing(self,method):
+        if method=="none":
+            return
+        if method=="all":
+            base_layer=self.layers[0]
+            for i in range(1,len(self.layers)):
+                self.layers[i]=base_layer
     def build_selective_decoder_layer(self, cfg, no_encoder_attn=False):
         layer = SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn)
         checkpoint = cfg.checkpoint_activations
