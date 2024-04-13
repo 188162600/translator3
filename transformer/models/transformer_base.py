@@ -23,7 +23,8 @@ from ..nn.logit_gambler import LogitGambler
 
 logger = logging.getLogger(__name__)
 import weakref
-    
+from fairseq.models import BaseFairseqModel
+# print("is instance",issubclass(BaseFairseqModel, FairseqEncoderDecoderModel))
 class TransformerModelBase(FairseqEncoderDecoderModel):
     """
     Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
@@ -45,6 +46,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
+        # self.set_epoch(1)
         # if next_steps_classifier is None:
             # next_steps_classifier=TransformerStepsClassifier(cfg,encoder,decoder)
         # self.next_steps_classifier=next_steps_classifier
@@ -61,7 +63,10 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
       
     #     if hasattr(self.next_steps_classifier,"set_last_loss"):
     #         self.next_steps_classifier.set_last_loss(loss)
-        
+    # def set_epoch(self, epoch):
+    #     for m in self.modules():
+    #         if hasattr(m, "set_epoch") and m != self:
+    #             m.set_epoch(epoch)
     @classmethod
     def add_args(cls, parser):
         """Add model-specific arguments to the parser."""

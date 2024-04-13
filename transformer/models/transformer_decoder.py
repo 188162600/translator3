@@ -167,6 +167,8 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.build_output_projection(cfg, dictionary, embed_tokens)
         # self.set_classifier_requires_grad(True)
         self.build_sharing(cfg.decoder.sharing_method)
+        if self.cfg.encoder.enable_classifier:
+            self.drop_default_index()
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -204,13 +206,84 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 ((i + 1) * cfg.decoder.layers) // (num_base_layers + 1),
                 BaseLayer(cfg),
             )
+    def set_epoch(self, epoch):
+        if self.cfg.encoder.classifier_learn_epoch>=epoch:
+            print("decoder drop default index")
+            self.drop_default_index()
+        if hasattr(super(),"set_epoch"):
+            super().set_epoch(epoch)
+    def drop_default_index(self):
+        if self.cfg.decoder.sharing_method=="all":
+            return
+        elif self.cfg.decoder.sharing_method=="none":
+            for i in range(1,len(self.layers)):
+                if self.cfg.decoder.fc1_selection_index is not None:
+                    self.layers[i].fc1.fill_with_default_index()
+                    self.layers[i].fc1.default_index=None
+                if self.cfg.decoder.fc2_selection_index is not None:
+                    self.layers[i].fc2.fill_with_default_index()
+                    self.layers[i].fc2.default_index=None
+                if self.cfg.decoder.self_attn_k_proj_selection_index is not None:
+                    self.layers[i].self_attn.k_proj.fill_with_default_index()
+                    self.layers[i].self_attn.k_proj.default_index=None
+                if self.cfg.decoder.self_attn_v_proj_selection_index is not None:
+                    self.layers[i].self_attn.v_proj.fill_with_default_index()
+                    self.layers[i].self_attn.v_proj.default_index=None
+                if self.cfg.decoder.self_attn_q_proj_selection_index is not None:
+                    self.layers[i].self_attn.q_proj.fill_with_default_index()
+                    self.layers[i].self_attn.q_proj.default_index=None
+                if self.cfg.decoder.self_attn_out_proj_selection_index is not None:
+                    self.layers[i].self_attn.out_proj.fill_with_default_index()
+                    self.layers[i].self_attn.out_proj.default_index=None
+                if self.layers[i].encoder_attn is not None:
+                    if self.cfg.decoder.encoder_attn_k_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.k_proj.fill_with_default_index()
+                        self.layers[i].encoder_attn.k_proj.default_index=None
+                    if self.cfg.decoder.encoder_attn_v_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.v_proj.fill_with_default_index()
+                        self.layers[i].encoder_attn.v_proj.default_index=None
+                    if self.cfg.decoder.encoder_attn_q_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.q_proj.fill_with_default_index()
+                        self.layers[i].encoder_attn.q_proj.default_index=None
+                    if self.cfg.decoder.encoder_attn_out_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.out_proj.fill_with_default_index()
+                        self.layers[i].encoder_attn.out_proj.default_index=None
+                
+        else:
+            raise NotImplementedError("sharing method not implemented")
+        
+        
+            
     def build_sharing(self,method):
         if method=="none":
             return
-        if method=="all":
+        elif method=="all":
             base_layer=self.layers[0]
             for i in range(1,len(self.layers)):
-                self.layers[i]=base_layer
+                if self.cfg.decoder.fc1_selection_index is not None:
+                    self.layers[i].fc1=base_layer.fc1
+                if self.cfg.decoder.fc2_selection_index is not None:
+                    self.layers[i].fc2=base_layer.fc2
+                if self.cfg.decoder.self_attn_k_proj_selection_index is not None:
+                    self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                if self.cfg.decoder.self_attn_v_proj_selection_index is not None:
+                    self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                if self.cfg.decoder.self_attn_q_proj_selection_index is not None:
+                    self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                if self.cfg.decoder.self_attn_out_proj_selection_index is not None:
+                    self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
+                if base_layer.encoder_attn is not None:
+                    if self.cfg.decoder.encoder_attn_k_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.k_proj=base_layer.encoder_attn.k_proj
+                    if self.cfg.decoder.encoder_attn_v_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.v_proj=base_layer.encoder_attn.v_proj
+                    if self.cfg.decoder.encoder_attn_q_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.q_proj=base_layer.encoder_attn.q_proj
+                    if self.cfg.decoder.encoder_attn_out_proj_selection_index is not None:
+                        self.layers[i].encoder_attn.out_proj=base_layer.encoder_attn.out_proj
+        else:
+            
+            raise NotImplementedError("sharing method not implemented")
     def build_selective_decoder_layer(self, cfg, no_encoder_attn=False):
         layer = SelectiveTransformerDecoderLayerBase(cfg, no_encoder_attn)
         checkpoint = cfg.checkpoint_activations
@@ -400,7 +473,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
-        for idx, layer in enumerate(self.layers[: next_steps.get_layers()]):
+        for idx, layer in enumerate(self.layers):
             if incremental_state is None and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
             else:

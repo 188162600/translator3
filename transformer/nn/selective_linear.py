@@ -15,12 +15,14 @@ from typing import Any, Tuple
 
 
 class SelectiveLinear(Module):
-    def __init__(self, total_options:int,num_options: int, in_features: int, out_features: int, bias: bool = True, batch_index: int = 0, device=None, dtype=None):
+    def __init__(self, total_options:int,num_options: int, in_features: int, out_features: int, bias: bool = True, batch_index: int = 0,default_index=None ,device=None, dtype=None):
         super(SelectiveLinear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.num_options = num_options
         self.total_options=total_options
+        assert isinstance(default_index,(int,type(None)))
+        self.default_index=default_index
         factory_kwargs = {'device': device, 'dtype': dtype}
         
         self.is_non_selective = (self.num_options==1 or self.num_options is None) and ( self.total_options==1 or self.total_options is None)
@@ -73,6 +75,16 @@ class SelectiveLinear(Module):
         return torch.nn.functional.linear(x, weighted_weight, weighted_biases)
             # final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
         # return final_output
+    def fill_with_default_index(self,noise_scale=0.01):
+        if self.default_index is None:
+            return
+        if self.is_non_selective:
+            return
+        for i in range(self.total_options):
+            if i!=self.default_index:
+                self.weight.data[i]=self.weight.data[self.default_index]+torch.randn_like(self.weight.data[self.default_index])*noise_scale
+                if self.bias is not None:
+                    self.bias.data[i]=self.bias.data[self.default_index]+torch.randn_like(self.bias.data[self.default_index])*noise_scale
         
     
     def forward(self, x, selection_probs):
@@ -81,6 +93,8 @@ class SelectiveLinear(Module):
         if self.is_non_selective:
             # print("non selective")
             return torch.nn.functional.linear(x, self.weight, self.bias)
+        if selection_probs is None:
+            return torch.nn.functional.linear(x, self.weight[self.default_index], self.bias[self.default_index])
         if selection_probs.dim()==1:
             return self.forward_unbatched_logits(x, selection_probs)
         assert selection_probs.dim() == 2

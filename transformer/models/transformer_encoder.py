@@ -123,14 +123,63 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = None
         # self.next_steps_classifier =torch.nn.Module()
         #self.set_classifier_requires_grad(True)
-        self.build_sharing(cfg.encoder.sharing)
+        self.build_sharing(cfg.encoder.sharing_method)
+        if self.cfg.encoder.enable_classifier:
+            self.drop_default_index()
+    # def set_epoch(self, epoch):
+    #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
+    #         self.drop_default_index()
+            
+    #         print("encoder drop default index")
+    #     if hasattr(super(),"set_epoch"):
+    #         super().set_epoch(epoch)
+    def drop_default_index(self):
+        if self.cfg.encoder.sharing_method=="all":
+            return
+        elif self.cfg.encoder.sharing_method=="none":
+            for i in range(1,len(self.layers)):
+                if self.cfg.encoder.fc1_selection_index is not None:
+                    self.layers[i].fc1.fill_with_default_index()
+                    self.layers[i].default_index=None
+                if self.cfg.encoder.fc2_selection_index is not None:
+                    self.layers[i].fc2.fill_with_default_index()
+                    self.layers[i].default_index=None
+                if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
+                    self.layers[i].self_attn.k_proj.fill_with_default_index()
+                    self.layers[i].default_index=None
+                if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
+                    self.layers[i].self_attn.v_proj.fill_with_default_index()
+                    self. layers[i].default_index=None
+                if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
+                    self.layers[i].self_attn.q_proj.fill_with_default_index()
+                    self.layers[i].default_index=None
+                if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
+                    self.layers[i].self_attn.out_proj.fill_with_default_index()
+                    self. layers[i].default_index=None
+               
+                    
+        
     def build_sharing(self,method):
         if method=="none":
             return
         if method=="all":
             base_layer=self.layers[0]
             for i in range(1,len(self.layers)):
-                self.layers[i]=base_layer
+                if self.cfg.encoder.fc1_selection_index is not None:
+                    self.layers[i].fc1=base_layer.fc1
+                if self.cfg.encoder.fc2_selection_index is not None:
+                    self.layers[i].fc2=base_layer.fc2
+                if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
+                    self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
+                    self.layers[i].self_attn.v_proj=base_layer.self_attn.v_proj
+                if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
+                    self.layers[i].self_attn.q_proj=base_layer.self_attn.q_proj
+                if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
+                    self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
+             
+                
+                
     def build_selective_encoder_layer(self, cfg):
         
         layer = SelectiveTransformerEncoderLayerBase(
@@ -280,7 +329,7 @@ class TransformerEncoderBase(FairseqEncoder):
         # encoder layers
         #print("index",index.shape,x.shape)
         
-        for idx, layer in enumerate(self.layers[:next_steps.get_layers()]):
+        for idx, layer in enumerate(self.layers):
             # with torch.set_grad_enabled(next_steps.requires_grad_for_layer(idx)):
             # if isinstance(layer, SelectiveTransformerEncoderLayerBase):
             lr = layer(

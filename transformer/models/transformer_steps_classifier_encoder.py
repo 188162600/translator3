@@ -24,7 +24,8 @@ from fairseq.modules import (
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
-
+# import logging
+# logger=logging.getLogger(__name__)
 
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
@@ -384,38 +385,57 @@ class NextSteps:
         self.index=index
         self.cfg=cfg
         self.encoder_decoder_cfg=encoder_decoder_cfg
-    def requires_grad_for_layer(self,index):
-        return True
+  
     def get_for_encoder_attn(self):
         return NextStepsForEncoderAttn(self)
-    def get_layers(self):
-        return self.encoder_decoder_cfg.transformer_layers
+    # def get_layers(self):
+    #     return self.encoder_decoder_cfg.transformer_layers
     def get_for_layer(self,index):
         return NextSteps(self.logits,self.cfg,self.encoder_decoder_cfg,index+self.index,)
     def get_for_encoder(self):
-        return NextSteps(self.logits,self.cfg,self.cfg.encoder,0)
+        return NextSteps(self.logits,self.cfg,self.cfg.encoder,self.index)
     def get_for_decoder(self):
-        return NextSteps(self.logits,self.cfg,self.cfg.decoder,self.cfg.encoder.selective_layers)
+        return NextSteps(self.logits,self.cfg,self.cfg.decoder,self.index)
     def get_for_fc1(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.fc1_selection_index]
     def get_for_fc2(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.fc2_selection_index]
     def get_for_q_proj(self):
+        if self.logits is None:
+            return None
         # print("self.logits.next",self.logits.shape)
         return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_q_proj_selection_index]
     def get_for_k_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_k_proj_selection_index]
     def get_for_v_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_v_proj_selection_index]
     def get_for_out_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.self_attn_out_proj_selection_index]
     def get_for_encoder_attn_q_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_q_proj_selection_index]
     def get_for_encoder_attn_k_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_k_proj_selection_index]
     def get_for_encoder_attn_v_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_v_proj_selection_index]
     def get_for_encoder_attn_out_proj(self):
+        if self.logits is None:
+            return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_out_proj_selection_index]
         
 
@@ -431,6 +451,8 @@ class TransformerStepsClassifier(torch.nn.Module):
         self. total_options=classifier_cfg. total_options
         self.classifier_layer = nn.Linear(cfg.encoder.embed_dim,self.encoder_decoder_layers*self.total_options*self.selective_layers)
         self.classifier_cfg = classifier_cfg
+        self.enable=classifier_cfg.enable_classifier
+        
     def output_layer(self,features:Tensor):
         # print("features",features.shape)
         features=features.mean(dim=1)
@@ -442,8 +464,13 @@ class TransformerStepsClassifier(torch.nn.Module):
         # logits.register_hook(lambda grad: print("classifier grad2",grad.sum()))
         
         return NextSteps(logits,self.cfg)
-    def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
+    # def set_epoch(self,epoch):
+    #     self.enable= epoch>=self.classifier_cfg.classifier_enable_epoch
+    #     print("classifier enable",self.enable)
         
+    def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
+        if not self.enable:
+            NextSteps(None,self.cfg)
         prev_encoder_out=previous_encode["encoder_out"][0] if previous_encode is not None else None
         encoder_mask=previous_encode["encoder_padding_mask"][0] if previous_encode is not None else None
         out=self.encoder(src_tokens,src_lengths,previous_encode=prev_encoder_out,padding_mask=encoder_mask)

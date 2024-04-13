@@ -33,7 +33,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         cfg (argparse.Namespace): parsed command-line arguments
     """
 
-    def __init__(self, cfg, return_fc=False):
+    def __init__(self, cfg, return_fc=False,index=None):
         super().__init__()
         self.cfg = cfg
         self.return_fc = return_fc
@@ -62,6 +62,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             cfg.encoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
+            index
         )
         self.fc2 = self.build_fc2(
             cfg.encoder.total_options,
@@ -70,25 +71,27 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
             self.embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
+            index
+            
         )
 
         self.final_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
-    def copy_from(self,other):
-        if isinstance(other,(fairseq_transformer_layer.TransformerDecoderLayerBase,SelectiveTransformerEncoderLayerBase)):
-            self.self_attn=(other.self_attn)
-            self.fc1.copy_from(other.fc1)
-            self.fc2.copy_from(other.fc2)
+    # def copy_from(self,other):
+    #     if isinstance(other,(fairseq_transformer_layer.TransformerDecoderLayerBase,SelectiveTransformerEncoderLayerBase)):
+    #         self.self_attn=(other.self_attn)
+    #         self.fc1.copy_from(other.fc1)
+    #         self.fc2.copy_from(other.fc2)
         
-            self.self_attn_layer_norm=(other.self_attn_layer_norm)
-            self.final_layer_norm=(other.final_layer_norm)
-            self.dropout_module=(other.dropout_module)
-            self.activation_fn=other.activation_fn
-            self.activation_dropout_module=(other.activation_dropout_module)
-            self.normalize_before=other.normalize_before
-            self.embed_dim=other.embed_dim
-            self.quant_noise=other.quant_noise
-            self.quant_noise_block_size=other.quant_noise_block_size
-            self.return_fc=other.return_fc
+    #         self.self_attn_layer_norm=(other.self_attn_layer_norm)
+    #         self.final_layer_norm=(other.final_layer_norm)
+    #         self.dropout_module=(other.dropout_module)
+    #         self.activation_fn=other.activation_fn
+    #         self.activation_dropout_module=(other.activation_dropout_module)
+    #         self.normalize_before=other.normalize_before
+    #         self.embed_dim=other.embed_dim
+    #         self.quant_noise=other.quant_noise
+    #         self.quant_noise_block_size=other.quant_noise_block_size
+    #         self.return_fc=other.return_fc
         
     # def build_fc1(self, input_dim, output_dim, q_noise, qn_block_size):
     #     return quant_noise(
@@ -99,14 +102,14 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
     #     return quant_noise(
     #         nn.Linear(input_dim, output_dim), p=q_noise, block_size=qn_block_size
     #     )
-    def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
         )
 
-    def build_fc2(self, total_options,num_options,input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc2(self, total_options,num_options,input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
         )
 
     def _get_fc_rank(self, remove_num: int) -> List[int]:
@@ -529,7 +532,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
     """
 
     def __init__(
-        self, cfg, no_encoder_attn=False, add_bias_kv=False, add_zero_attn=False
+        self, cfg, no_encoder_attn=False, add_bias_kv=False, add_zero_attn=False,index=None
     ):
         super().__init__()
         self.embed_dim = cfg.decoder.embed_dim
@@ -546,6 +549,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             cfg,
             add_bias_kv=add_bias_kv,
             add_zero_attn=add_zero_attn,
+            index=index
         )
         self.attn_ln = (
             LayerNorm(self.embed_dim)
@@ -604,6 +608,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             cfg.decoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
+            index
         )
         self.fc2 = self.build_fc2(
             cfg.decoder.total_options if cfg.decoder.fc2_selection_index is not None else None,
@@ -612,6 +617,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             self.embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
+            index
         )
 
         self.final_layer_norm = LayerNorm(self.embed_dim, export=cfg.export)
@@ -642,18 +648,18 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
 
     # def build_fc2(self, input_dim, output_dim, q_noise, qn_block_size):
     #     return quant_noise(nn.Linear(input_dim, output_dim), q_noise, qn_block_size)
-    def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
         )
 
-    def build_fc2(self,total_options, num_options,input_dim, output_dim, q_noise, qn_block_size):
+    def build_fc2(self,total_options, num_options,input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
         )
         
     def build_self_attention(
-        self, embed_dim, cfg, add_bias_kv=False, add_zero_attn=False
+        self, embed_dim, cfg, add_bias_kv=False, add_zero_attn=False,index=None
     ):
         return SelectiveMultiheadAttention(
             
@@ -674,6 +680,7 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
             q_noise=self.quant_noise,
             qn_block_size=self.quant_noise_block_size,
             xformers_att_config=cfg.decoder.xformers_att_config,
+            index=index
         )
 
     def build_encoder_attention(self, embed_dim, cfg):

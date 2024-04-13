@@ -33,12 +33,12 @@ from fairseq.dataclass import FairseqDataclass
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
     fc1_selection_index:int=0
-    fc2_selection_index:int=0
-    self_attn_k_proj_selection_index:int=None
-    self_attn_v_proj_selection_index:int=None
-    self_attn_q_proj_selection_index:int=None
-    self_attn_out_proj_selection_index:int=None
-    
+    fc2_selection_index:int=1
+    self_attn_k_proj_selection_index:int=2
+    self_attn_v_proj_selection_index:int=3
+    self_attn_q_proj_selection_index:int=4
+    self_attn_out_proj_selection_index:int=5
+   
     embed_path: Optional[str] = field(
         default=None, metadata={"help": "path to pre-trained embedding"}
     )
@@ -51,7 +51,7 @@ class EncDecBaseConfig(FairseqDataclass):
     layers: int = field(default=6, metadata={"help": "number of layers in the network"})
     # classifier_layers:int=field(default=8,metadata={"help":"number of classifier layers"})
     # transformer_layers:int=field(default=6,metadata={"help":"number of transformer layers"})
-    
+    enable_classifier:bool=field(default=False)
    
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
@@ -90,15 +90,15 @@ class DecoderConfig(EncDecBaseConfig):
     #     default=2,metadata={"help":"number of classifier layers"}
     # )
     fc1_selection_index:int=0
-    fc2_selection_index:int=0
-    self_attn_k_proj_selection_index:int=None
-    self_attn_v_proj_selection_index:int=None
-    self_attn_q_proj_selection_index:int=None
-    self_attn_out_proj_selection_index:int=None
-    encoder_attn_k_proj_selection_index:int=None
-    encoder_attn_v_proj_selection_index:int=None
-    encoder_attn_q_proj_selection_index:int=None
-    encoder_attn_out_proj_selection_index:int=None
+    fc2_selection_index:int=1
+    self_attn_k_proj_selection_index:int=2
+    self_attn_v_proj_selection_index:int=3
+    self_attn_q_proj_selection_index:int=4
+    self_attn_out_proj_selection_index:int=5
+    encoder_attn_k_proj_selection_index:int=6
+    encoder_attn_v_proj_selection_index:int=7
+    encoder_attn_q_proj_selection_index:int=8
+    encoder_attn_out_proj_selection_index:int=9
     @property
     def selective_layers(self):
         return max(self.fc1_selection_index,self.fc2_selection_index,
