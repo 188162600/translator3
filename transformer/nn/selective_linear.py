@@ -138,21 +138,78 @@ class SelectiveLinear(Module):
 
     def extra_repr(self) -> str:
         return f'total_options={self.total_options}, num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+    
+    # def _save_to_state_dict(self, destination, prefix, keep_vars):
+    #     weight_key = prefix + 'weight'
+    #     weights_key = prefix + 'weights'
+    #     bias_key = prefix + 'bias'
+    #     biases_key = prefix + 'biases'
+    #     # print("keep_vars",keep_vars)
+    #     if self.is_non_selective:
+    #         destination[weight_key] = self.weight if keep_vars else self.weight.data
+    #         destination[bias_key] = self.bias if keep_vars else self.bias.data
+    #     else:
+    #         destination[weights_key] = self.weight if keep_vars else self.weight.data
+    #         destination[biases_key] = self.bias if keep_vars else self.bias.data
+    #         if self.default_index is not None:
+    #             destination[weight_key]=self.weight[self.default_index] if keep_vars else self.weight.data[self.default_index]
+    #             destination[bias_key]=self.bias[self.default_index] if keep_vars else self.bias.data[self.default_index]
+           
+    #     # return super()._save_to_state_dict(destination, prefix, keep_vars)
+        
+    
+    # def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+        
+    #     weight_key = prefix + 'weight'
+    #     weights_key = prefix + 'weights'
+    #     bias_key = prefix + 'bias'
+    #     biases_key = prefix + 'biases'
+    #     if weights_key in state_dict:
+    #         weights = state_dict[weights_key]
+    #         if weights.dim() == 3:
+    #             state_dict[weight_key] = weights
+    #     elif weight_key in state_dict:
+    #         weight = state_dict[weight_key]
+    #         if weight.dim() == 2:
+    #             weight = weight.unsqueeze(0).expand(self.num_options, -1, -1)
+    #             state_dict[weight_key] = weight
+    #     if biases_key in state_dict:
+    #         biases = state_dict[biases_key]
+    #         if biases.dim() == 2:
+    #             state_dict[bias_key] = biases
+    #     elif bias_key in state_dict:
+    #         bias = state_dict[bias_key]
+    #         if bias.dim() == 1:
+    #             bias = bias.unsqueeze(0).expand(self.num_options, -1)
+    #             state_dict[bias_key] = bias
+            
+    #     return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
 
-    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
-        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
-
-        weight_key = prefix + 'weights'
-        bias_key = prefix + 'bias'
-        if weight_key in state_dict:
-            weight = state_dict[weight_key]
-            if weight.dim() == 2:
-                weight = weight.unsqueeze(0).expand(self.num_options, -1, -1)
-                state_dict[weight_key] = weight
+        # if weights_key in state_dict:
+        #     weights = state_dict[weights_key]
+        #     if weights.dim() == 3:
+        #         state_dict[weight_key] = weights
                 
-        if bias_key in state_dict:
-            bias = state_dict[bias_key]
-            if bias.dim() == 1:
-                bias = bias.unsqueeze(0).expand(self.num_options, -1)
-                state_dict[bias_key] = bias
+        # if weight_key in state_dict:
+        #     weight = state_dict[weight_key]
+        #     if weight.dim() == 2:
+        #         weight = weight.unsqueeze(0).expand(self.num_options, -1, -1)
+        #         state_dict[weight_key] = weight
+        # elif weights_key in state_dict:
+        #     weights = state_dict[weights_key]
+        #     if weights.dim() == 3:
+        #         state_dict[weight_key] = weights
+        # if bias_key in state_dict:
+        #     bias = state_dict[bias_key]
+        #     if bias.dim() == 1:
+        #         bias = bias.unsqueeze(0).expand(self.num_options, -1)
+        #         state_dict[bias_key] = bias
+            
+        # elif biases_key in state_dict:
+        #     biases = state_dict[biases_key]
+        #     if biases.dim() == 2:
+        #         state_dict[bias_key] = biases
+            
+        
+
                 

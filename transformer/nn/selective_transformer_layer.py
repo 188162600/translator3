@@ -185,7 +185,7 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.fc2.bias = torch.nn.Parameter(new_fc2_bias)
 
     def build_self_attention(self, embed_dim, cfg,index):
-        print("index self att",index)
+        # print("index self att",index)
         return SelectiveMultiheadAttention(
             cfg.encoder.total_options if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
             cfg.encoder.options_each_layer if cfg.encoder.self_attn_k_proj_selection_index is not None else None,

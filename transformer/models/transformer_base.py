@@ -46,12 +46,23 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
-    def drop_default_index(self):
+        # self. try_drop_default_index()
+    def try_drop_default_index(self):
         if self.cfg.decoder.sharing_method=="all":
             return
         elif self.cfg.decoder.sharing_method=="none":
-            for i in range(0,len(self.cfg.encoder.classifier_encoder_layers)):
-                pass
+            if self.cfg.decoder.enable_classifier:
+                for i in range(0,self.cfg.encoder.classifier_encoder_layers):
+                    if i>=len(self.encoder.layers):
+                        break
+                    state_dict=self.encoder.layers[i].state_dict()
+                    self.encoder.next_steps_classifier.encoder.layers[i].load_state_dict(state_dict)
+            if self.cfg.decoder.enable_classifier:
+                start=min(0,self.cfg.encoder.classifier_encoder_layers-len(self.encoder.layers))
+                for i in range(start,self.cfg.decoder.classifier_decoder_layers):
+                    if i>=len(self.decoder.layers):
+                        state_dict=self.decoder.layers[i].state_dict()
+                        self.decoder.next_steps_classifier.encoder.layers[i-start].load_state_dict(state_dict)
                 # copy_from=self.cfg.encoder.classifier_encoder_layers[i]
                 # copy_to=self.cfg.decoder.classifier_decoder_layers[i]
                 # self.encoder.next_steps_classifier.layers[i]=self.encoder.layers[i]
