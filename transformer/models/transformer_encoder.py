@@ -367,13 +367,7 @@ class TransformerEncoderBase(FairseqEncoder):
         if len(encoder_states) > 0:
             for idx, state in enumerate(encoder_states):
                 encoder_states[idx] = state.index_select(1, new_order)
-        next_steps=encoder_out["next_steps"]
-        # print("next steps", new_encoder_out[0].shape,encoder_out["encoder_out"][0].shape)
-        # beam_size = math.ceil( new_encoder_out[0].size(1)/encoder_out["encoder_out"][0].size(1))
-        # print("beam_size",beam_size)
-        # print("beam_size",beam_size)
-        # print(next_steps.logits.shape, new_encoder_out[0].shape,encoder_out["encoder_out"][0].shape)
-        next_steps.logits=next_steps.logits.index_select(0, new_order)
+        
         # torch.Tensor.repeat()
         return {
             "encoder_out": new_encoder_out,  # T x B x C
@@ -382,7 +376,7 @@ class TransformerEncoderBase(FairseqEncoder):
             "encoder_states": encoder_states,  # List[T x B x C]
             "src_tokens": src_tokens,  # B x T
             "src_lengths": src_lengths,  # B x 1
-            "next_steps": next_steps
+            
         }
 
     @torch.jit.export
