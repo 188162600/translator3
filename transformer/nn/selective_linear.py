@@ -138,7 +138,11 @@ class SelectiveLinear(Module):
 
     def extra_repr(self) -> str:
         return f'total_options={self.total_options}, num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
-    
+    def get_non_selective_params_data(self):
+        if self.is_non_selective:
+            return [self.weight.data,self.bias.data if self.bias is not None else None]
+        assert self.default_index is not None
+        return [self.weight.data[self.default_index],self.bias.data[self.default_index] if self.bias is not None else None]
     # def _save_to_state_dict(self, destination, prefix, keep_vars):
     #     weight_key = prefix + 'weight'
     #     weights_key = prefix + 'weights'
