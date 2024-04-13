@@ -53,14 +53,14 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         # self.next_steps_classifier=GamblerNextStepsClassifier(cfg)
         # encoder.next_steps_classifier=TransformerEncoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
         # decoder.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
-    def set_last_loss(self, loss):
-        #loss=loss.detach()
-        #  def set_last_loss(self, loss):
+    # def set_last_loss(self, loss):
+    #     #loss=loss.detach()
+    #     #  def set_last_loss(self, loss):
         
         
       
-        if hasattr(self.next_steps_classifier,"set_last_loss"):
-            self.next_steps_classifier.set_last_loss(loss)
+    #     if hasattr(self.next_steps_classifier,"set_last_loss"):
+    #         self.next_steps_classifier.set_last_loss(loss)
         
     @classmethod
     def add_args(cls, parser):

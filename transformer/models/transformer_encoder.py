@@ -241,6 +241,7 @@ class TransformerEncoderBase(FairseqEncoder):
                   hidden states of shape `(src_len, batch, embed_dim)`.
                   Only populated if *return_all_hiddens* is True.
         """
+        # print("src_tokens",src_tokens.shape)
         # # index=next_steps.get_mapped_indices()
         # assert index is not None
         

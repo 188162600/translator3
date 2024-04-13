@@ -432,16 +432,24 @@ class TransformerStepsClassifier(torch.nn.Module):
         self.classifier_layer = nn.Linear(cfg.encoder.embed_dim,self.encoder_decoder_layers*self.total_options*self.selective_layers)
         self.classifier_cfg = classifier_cfg
     def output_layer(self,features:Tensor):
+        # print("features",features.shape)
         features=features.mean(dim=1)
         logits=self.classifier_layer(features)
         logits=logits.view(-1,self.encoder_decoder_layers,self.selective_layers,self.total_options)
+        # logits.register_hook(lambda grad: print("classifier grad",grad.sum()))
+        
+        # logits=logits.softmax(dim=-1)
+        # logits.register_hook(lambda grad: print("classifier grad2",grad.sum()))
+        
         return NextSteps(logits,self.cfg)
     def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
         
         prev_encoder_out=previous_encode["encoder_out"][0] if previous_encode is not None else None
         encoder_mask=previous_encode["encoder_padding_mask"][0] if previous_encode is not None else None
         out=self.encoder(src_tokens,src_lengths,previous_encode=prev_encoder_out,padding_mask=encoder_mask)
+        
         out=out["encoder_out"][0]
+        # out.register_hook(lambda grad: print("classifier out",grad.sum()))
         out=out.transpose(0,1)
         return self.output_layer(out)
         
