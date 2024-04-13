@@ -51,9 +51,7 @@ class EncDecBaseConfig(FairseqDataclass):
     classifier_layers:int=field(default=8,metadata={"help":"number of classifier layers"})
     transformer_layers:int=field(default=6,metadata={"help":"number of transformer layers"})
     
-    non_selective_layers: int = field(default=4, metadata={"help": "number of layers"})
-    selective_layers: int = field(default=4, metadata={"help": "number of non-shared layers"})
-    
+   
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
     )
@@ -75,22 +73,34 @@ class EncDecBaseConfig(FairseqDataclass):
             "help": "config for xFormers attention, defined in xformers.components.attention.AttentionConfig"
         },
     )
-
+    options_each_layer:int=field(default=6,metadata={"help":"number of options each layer"})
+    total_options:int=field(default=6,metadata={"help":"total number of options"})
+    classifier_encoder_layers:int=field(default=4,metadata={"help":"number of classifier layers in encoder"})
+    @property
+    def selective_layers(self):
+        return max(self.fc1_selection_index,self.fc2_selection_index,
+                   self.self_attn_q_proj_selection_index,self.self_attn_v_proj_selection_index,self.self_attn_k_proj_selection_index,self.self_attn_out_proj_selection_index)+1
+    
 @dataclass
 class DecoderConfig(EncDecBaseConfig):
     # classifier_layers:int = field(
     #     default=2,metadata={"help":"number of classifier layers"}
     # )
-    fc1_selection_index:int=6
-    fc2_selection_index:int=7
-    self_attn_k_proj_selection_index:int=8
-    self_attn_v_proj_selection_index:int=9
-    self_attn_q_proj_selection_index:int=10
-    self_attn_out_proj_selection_index:int=11
-    encoder_attn_k_proj_selection_index:int=12
-    encoder_attn_v_proj_selection_index:int=13
-    encoder_attn_q_proj_selection_index:int=14
-    encoder_attn_out_proj_selection_index:int=15
+    fc1_selection_index:int=0
+    fc2_selection_index:int=1
+    self_attn_k_proj_selection_index:int=2
+    self_attn_v_proj_selection_index:int=3
+    self_attn_q_proj_selection_index:int=4
+    self_attn_out_proj_selection_index:int=5
+    encoder_attn_k_proj_selection_index:int=6
+    encoder_attn_v_proj_selection_index:int=7
+    encoder_attn_q_proj_selection_index:int=8
+    encoder_attn_out_proj_selection_index:int=9
+    @property
+    def selective_layers(self):
+        return max(self.fc1_selection_index,self.fc2_selection_index,
+                   self.self_attn_q_proj_selection_index,self.self_attn_v_proj_selection_index,self.self_attn_k_proj_selection_index,self.self_attn_out_proj_selection_index,
+                   self.encoder_attn_q_proj_selection_index,self.encoder_attn_v_proj_selection_index,self.encoder_attn_k_proj_selection_index,self.encoder_attn_out_proj_selection_index)+1
     
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
@@ -99,7 +109,7 @@ class DecoderConfig(EncDecBaseConfig):
             "help": "decoder output dimension (extra linear layer if different from decoder embed dim)"
         },
     )
-   
+    classifier_encoder_layers:int=field(default=2,metadata={"help":"number of classifier layers in encoder"})
    
     
     def __post_init__(self):
@@ -131,13 +141,7 @@ class QuantNoiseConfig(FairseqDataclass):
 
 @dataclass
 class TransformerConfig(FairseqDataclass):
-    @property
-    def selective_layers(self):
-        return max(self.encoder.fc1_selection_index,self.encoder.fc2_selection_index,self.encoder.self_attn_k_proj_selection_index,self.encoder.self_attn_v_proj_selection_index,self.encoder.self_attn_q_proj_selection_index,self.encoder.self_attn_out_proj_selection_index,
-                   self.decoder.fc1_selection_index,self.decoder.fc2_selection_index,self.decoder.self_attn_k_proj_selection_index,self.decoder.self_attn_v_proj_selection_index,self.decoder.self_attn_q_proj_selection_index,self.decoder.self_attn_out_proj_selection_index,
-                   self.decoder.encoder_attn_k_proj_selection_index,self.decoder.encoder_attn_v_proj_selection_index,self.decoder.encoder_attn_q_proj_selection_index,self.decoder.encoder_attn_out_proj_selection_index)+1
-    options_each_layer:int=field(default=6,metadata={"help":"number of options each layer"})
-    total_options:int=field(default=6,metadata={"help":"total number of options"})
+   
     activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
         default="relu",
         metadata={"help": "activation function to use"},

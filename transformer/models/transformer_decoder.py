@@ -22,7 +22,8 @@ from fairseq.modules.transformer_layer import TransformerDecoderLayerBase
 from ..nn.confidence_loss import confidence_loss
 
 from ..models.transformer_config import TransformerConfig
-from ..models.next_steps import NextSteps
+
+from ..models.transformer_steps_classifier_encoder import NextSteps,TransformerStepsClassifier
 # from fairseq.models.transformer import TransformerConfig
 from fairseq.modules import (
     AdaptiveSoftmax,
@@ -133,20 +134,20 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.layers = LayerDropModuleList(p=self.decoder_layerdrop)
         else:
             self.layers = nn.ModuleList([])
-        shared_layer=self.build_selective_decoder_layer(cfg, no_encoder_attn)
+       
         self.layers.extend(
             [
-                # self.build_selective_decoder_layer(cfg, no_encoder_attn)
-                shared_layer
+                self.build_selective_decoder_layer(cfg, no_encoder_attn)
+                # shared_layer
                 for _ in range(cfg.decoder.selective_layers)
             ]
         )
-        self.layers.extend(
-            [
-                self.build_non_selective_decoder_layer(cfg, no_encoder_attn)
-                for _ in range(cfg.decoder.non_selective_layers)
-            ]
-        )
+        # self.layers.extend(
+        #     [
+        #         self.build_non_selective_decoder_layer(cfg, no_encoder_attn)
+        #         for _ in range(cfg.decoder.non_selective_layers)
+        #     ]
+        # )
         self.num_layers = len(self.layers)
 
         if cfg.decoder.normalize_before and not cfg.no_decoder_final_norm:
@@ -397,30 +398,20 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
-            with torch.set_grad_enabled(next_steps.requires_grad_for_layer(idx)):
-                if isinstance(layer,SelectiveTransformerDecoderLayerBase):
-                    x, layer_attn, _ = layer(
-                        x,
-                        enc,
-                        padding_mask,
-                        incremental_state,
-                        self_attn_mask=self_attn_mask,
-                        self_attn_padding_mask=self_attn_padding_mask,
-                        need_attn=bool((idx == alignment_layer)),
-                        need_head_weights=bool((idx == alignment_layer)),
-                        index=next_steps.get_for_layer(idx)
-                    )
-                else:
-                    x, layer_attn, _ = layer(
-                        x,
-                        enc,
-                        padding_mask,
-                        incremental_state,
-                        self_attn_mask=self_attn_mask,
-                        self_attn_padding_mask=self_attn_padding_mask,
-                        need_attn=bool((idx == alignment_layer)),
-                        need_head_weights=bool((idx == alignment_layer)),
-                    )
+            # with torch.set_grad_enabled(next_steps.requires_grad_for_layer(idx)):
+                # if isinstance(layer,SelectiveTransformerDecoderLayerBase):
+            x, layer_attn, _ = layer(
+                x,
+                enc,
+                padding_mask,
+                incremental_state,
+                self_attn_mask=self_attn_mask,
+                self_attn_padding_mask=self_attn_padding_mask,
+                need_attn=bool((idx == alignment_layer)),
+                need_head_weights=bool((idx == alignment_layer)),
+                index=next_steps.get_for_layer(idx)
+            )
+            
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
                 attn = layer_attn.float().to(x)
@@ -531,7 +522,7 @@ class TransformerDecoder(TransformerDecoderBase):
             no_encoder_attn=no_encoder_attn,
             output_projection=output_projection,
         )
-        self.next_steps_classifier=None
+        self.next_steps_classifier=TransformerStepsClassifier(cfg,cfg.decoder,None,None)
     # @torch.jit.ignore
     def forward( self,
         prev_output_tokens,
@@ -542,24 +533,8 @@ class TransformerDecoder(TransformerDecoderBase):
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
-        return_all_hiddens: bool = False,next_steps=None):
-        # print(encoder_out.keys(),"key2")
-        # print(encoder_out.keys(),"key2","requirs_grad",encoder_out["encoder_out"][0].requires_grad)
-        # next_steps= encoder_out["next_steps"][0]
-        # next_steps=self.next_steps_classifier().previous_steps
-        # if next_steps is None:
-        #     source_tokens=encoder_out["src_tokens"]
-        #     source_lengths=encoder_out["src_lengths"]
-        #     print("source_tokens",source_tokens)
-        #     print("source_lengths",source_lengths)
-        #     # print("source_tokens",source_tokens.shape)
-        #     next_steps=self.next_steps_classifier()(src_tokens=source_tokens,src_lengths=source_lengths,prev_output_tokens=prev_output_tokens)
-        # print(prev_output_tokens)
-        # print("decoder forward",encoder_out.keys())
-        # if next_steps is None:
-        next_steps=encoder_out["next_steps"]
-        # print("decoder forward NEXT",next_steps.shape)
-        # next_steps=NextSteps(next_steps,self.cfg)
+        return_all_hiddens: bool = False):
+        next_steps=self.next_steps_classifier(previous_encode=encoder_out)
         out= super().forward(
             prev_output_tokens,
             encoder_out=encoder_out,

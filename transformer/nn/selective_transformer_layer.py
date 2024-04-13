@@ -56,16 +56,16 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
         self.normalize_before = cfg.encoder.normalize_before
         #self.num_options = cfg.encoder.num_options
         self.fc1 = self.build_fc1(
-            cfg.total_options,
-            cfg.options_each_layer,
+            cfg.encoder.total_options,
+            cfg.encoder.options_each_layer,
             self.embed_dim,
             cfg.encoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.total_options,
-            cfg.options_each_layer,
+            cfg.encoder.total_options,
+            cfg.encoder.options_each_layer,
             cfg.encoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,
@@ -183,15 +183,14 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
     def build_self_attention(self, embed_dim, cfg):
     
         return SelectiveMultiheadAttention(
-            
-            cfg.total_options if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
-            cfg.total_options if cfg.encoder.self_attn_v_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.encoder.self_attn_v_proj_selection_index is not None else None,
-            cfg.total_options if cfg.encoder.self_attn_q_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.encoder.self_attn_q_proj_selection_index is not None else None,
-            cfg.total_options if cfg.encoder.self_attn_out_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.encoder.self_attn_out_proj_selection_index is not None else None,
+            cfg.encoder.total_options if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.encoder.options_each_layer if cfg.encoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.encoder.total_options if cfg.encoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.encoder.options_each_layer if cfg.encoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.encoder.total_options if cfg.encoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.encoder.options_each_layer if cfg.encoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.encoder.total_options if cfg.encoder.self_attn_out_proj_selection_index is not None else None,
+            cfg.encoder.options_each_layer if cfg.encoder.self_attn_out_proj_selection_index is not None else None,
             embed_dim,
             cfg.encoder.attention_heads,
             dropout=cfg.attention_dropout,
@@ -599,16 +598,16 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
 
         self.fc1 = self.build_fc1(
             
-            cfg.total_options if cfg.decoder.fc1_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.fc1_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.fc1_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.fc1_selection_index is not None else None,
             self.embed_dim,
             cfg.decoder.ffn_embed_dim,
             self.quant_noise,
             self.quant_noise_block_size,
         )
         self.fc2 = self.build_fc2(
-            cfg.total_options if cfg.decoder.fc2_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.fc2_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.fc2_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.fc2_selection_index is not None else None,
             cfg.decoder.ffn_embed_dim,
             self.embed_dim,
             self.quant_noise,
@@ -658,14 +657,14 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
     ):
         return SelectiveMultiheadAttention(
             
-            cfg.total_options if cfg.decoder.self_attn_k_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.self_attn_k_proj_selection_index is not None else None,
-            cfg.total_options if cfg.decoder.self_attn_v_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.self_attn_v_proj_selection_index is not None else None,
-            cfg.total_options if cfg.decoder.self_attn_q_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.self_attn_q_proj_selection_index is not None else None,
-            cfg.total_options if cfg.decoder.self_attn_out_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.self_attn_out_proj_selection_index is not None else None,
+            cfg.decoder. total_options if cfg.decoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.self_attn_k_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.self_attn_v_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.self_attn_q_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.self_attn_out_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.self_attn_out_proj_selection_index is not None else None,
             embed_dim,
             cfg.decoder.attention_heads,
             dropout=cfg.attention_dropout,
@@ -681,14 +680,14 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
       
         return SelectiveMultiheadAttention(
            
-            cfg.total_options if cfg.decoder.encoder_attn_k_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.encoder_attn_k_proj_selection_index is not None else None,
-            cfg.total_options if cfg.decoder.encoder_attn_v_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.encoder_attn_v_proj_selection_index is not None else None,
-            cfg.total_options if cfg.decoder.encoder_attn_q_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.encoder_attn_q_proj_selection_index is not None else None,
-            cfg.total_options if cfg.decoder.encoder_attn_out_proj_selection_index is not None else None,
-            cfg.options_each_layer if cfg.decoder.encoder_attn_out_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.encoder_attn_k_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.encoder_attn_k_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.encoder_attn_v_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.encoder_attn_v_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.encoder_attn_q_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.encoder_attn_q_proj_selection_index is not None else None,
+            cfg.decoder.total_options if cfg.decoder.encoder_attn_out_proj_selection_index is not None else None,
+            cfg.decoder.options_each_layer if cfg.decoder.encoder_attn_out_proj_selection_index is not None else None,
             embed_dim,
             cfg.decoder.attention_heads,
             kdim=cfg.encoder.embed_dim,
