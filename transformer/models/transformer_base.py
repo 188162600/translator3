@@ -46,6 +46,34 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
+    def drop_default_index(self):
+        if self.cfg.decoder.sharing_method=="all":
+            return
+        elif self.cfg.decoder.sharing_method=="none":
+            for i in range(0,len(self.cfg.encoder.classifier_encoder_layers)):
+                pass
+                # copy_from=self.cfg.encoder.classifier_encoder_layers[i]
+                # copy_to=self.cfg.decoder.classifier_decoder_layers[i]
+                # self.encoder.next_steps_classifier.layers[i]=self.encoder.layers[i]
+                
+                # if self.cfg.encoder.fc1_selection_index is not None:
+                #     self.layers[i].fc1.fill_with_default_index()
+                #     self.layers[i].default_index=None
+                # if self.cfg.encoder.fc2_selection_index is not None:
+                #     self.layers[i].fc2.fill_with_default_index()
+                #     self.layers[i].default_index=None
+                # if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
+                #     self.layers[i].self_attn.k_proj.fill_with_default_index()
+                #     self.layers[i].default_index=None
+                # if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
+                #     self.layers[i].self_attn.v_proj.fill_with_default_index()
+                #     self. layers[i].default_index=None
+                # if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
+                #     self.layers[i].self_attn.q_proj.fill_with_default_index()
+                #     self.layers[i].default_index=None
+                # if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
+                #     self.layers[i].self_attn.out_proj.fill_with_default_index()
+                #     self. layers[i].default_index=None
         # self.set_epoch(1)
         # if next_steps_classifier is None:
             # next_steps_classifier=TransformerStepsClassifier(cfg,encoder,decoder)

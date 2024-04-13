@@ -51,7 +51,7 @@ class EncDecBaseConfig(FairseqDataclass):
     layers: int = field(default=6, metadata={"help": "number of layers in the network"})
     # classifier_layers:int=field(default=8,metadata={"help":"number of classifier layers"})
     # transformer_layers:int=field(default=6,metadata={"help":"number of transformer layers"})
-    enable_classifier:bool=field(default=True)
+    enable_classifier:bool=field(default=False)
    
     attention_heads: int = field(
         default=8, metadata={"help": "number of attention heads"}
