@@ -97,6 +97,7 @@ class SelectiveLinear(Module):
         if selection_probs is None:
             assert self.default_index is not None
             # print("selection_probs is None")
+            # print("default_index",self.default_index,"weight",self.weight.shape,"bias",self.bias.shape,"x",x.shape) 
             # print("default_index",self.default_index,"weight",self.weight.shape,"bias",self.bias.shape,"x",x.shape)
             return torch.nn.functional.linear(x, self.weight[self.default_index], self.bias[self.default_index])
         if selection_probs.dim()==1:
