@@ -624,7 +624,7 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
             if "prev_key_padding_mask" in saved_state:
                 prev_key_padding_mask = saved_state["prev_key_padding_mask"]
             assert k is not None and v is not None
-            key_padding_mask = MultiheadAttention._append_prev_key_padding_mask(
+            key_padding_mask = SelectiveMultiheadAttention._append_prev_key_padding_mask(
                 key_padding_mask=key_padding_mask,
                 prev_key_padding_mask=prev_key_padding_mask,
                 batch_size=kv_bsz,
