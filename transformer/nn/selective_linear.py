@@ -75,7 +75,7 @@ class SelectiveLinear(Module):
         return torch.nn.functional.linear(x, weighted_weight, weighted_biases)
             # final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
         # return final_output
-    def fill_with_default_index(self,noise_scale=0.01):
+    def fill_with_default_index(self,noise_scale=0.001):
         if self.default_index is None:
             return
         if self.is_non_selective:
