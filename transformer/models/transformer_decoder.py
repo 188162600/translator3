@@ -165,10 +165,9 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         self.output_projection = output_projection
         if self.output_projection is None:
             self.build_output_projection(cfg, dictionary, embed_tokens)
-        # self.set_classifier_requires_grad(True)
+       
         self.build_sharing(cfg.decoder.sharing_method)
-        # if self.cfg.encoder.enable_classifier:
-        #     self.drop_default_index()
+       
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -206,68 +205,10 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 ((i + 1) * cfg.decoder.layers) // (num_base_layers + 1),
                 BaseLayer(cfg),
             )
-    # def set_epoch(self, epoch):
-    #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
-    #         print("decoder drop default index")
-    #         self.drop_default_index()
-    #     if hasattr(super(),"set_epoch"):
-    #         super().set_epoch(epoch)
-    def drop_default_index(self):
-        if self.cfg.decoder.sharing_method=="all":
-            return
-        elif self.cfg.decoder.sharing_method=="none":
-            for i in range(0,len(self.layers)):
-                if self.cfg.decoder.fc1_selection_index is not None:
-                    self.layers[i].fc1.fill_with_default_index()
-                    self.layers[i].fc1.default_index=None
-                if self.cfg.decoder.fc2_selection_index is not None:
-                    self.layers[i].fc2.fill_with_default_index()
-                    self.layers[i].fc2.default_index=None
-                if self.cfg.decoder.self_attn_k_proj_selection_index is not None:
-                    self.layers[i].self_attn.k_proj.fill_with_default_index()
-                    self.layers[i].self_attn.k_proj.default_index=None
-                if self.cfg.decoder.self_attn_v_proj_selection_index is not None:
-                    self.layers[i].self_attn.v_proj.fill_with_default_index()
-                    self.layers[i].self_attn.v_proj.default_index=None
-                if self.cfg.decoder.self_attn_q_proj_selection_index is not None:
-                    self.layers[i].self_attn.q_proj.fill_with_default_index()
-                    self.layers[i].self_attn.q_proj.default_index=None
-                if self.cfg.decoder.self_attn_out_proj_selection_index is not None:
-                    self.layers[i].self_attn.out_proj.fill_with_default_index()
-                    self.layers[i].self_attn.out_proj.default_index=None
-                if self.layers[i].encoder_attn is not None:
-                    if self.cfg.decoder.encoder_attn_k_proj_selection_index is not None:
-                        self.layers[i].encoder_attn.k_proj.fill_with_default_index()
-                        self.layers[i].encoder_attn.k_proj.default_index=None
-                    if self.cfg.decoder.encoder_attn_v_proj_selection_index is not None:
-                        self.layers[i].encoder_attn.v_proj.fill_with_default_index()
-                        self.layers[i].encoder_attn.v_proj.default_index=None
-                    if self.cfg.decoder.encoder_attn_q_proj_selection_index is not None:
-                        self.layers[i].encoder_attn.q_proj.fill_with_default_index()
-                        self.layers[i].encoder_attn.q_proj.default_index=None
-                    if self.cfg.decoder.encoder_attn_out_proj_selection_index is not None:
-                        self.layers[i].encoder_attn.out_proj.fill_with_default_index()
-                        self.layers[i].encoder_attn.out_proj.default_index=None
-                
-        else:
-            raise NotImplementedError("sharing method not implemented")
-        
-        
-            
+
     def build_sharing(self,method):
         if method=="none":
-            for i in range(0,len(self.layers)):
-                self.layers[i].fc1.default_index=0
-                self.layers[i].fc2.default_index=0
-                self.layers[i].self_attn.k_proj.default_index=0
-                self.layers[i].self_attn.v_proj.default_index=0
-                self.layers[i].self_attn.q_proj.default_index=0
-                self.layers[i].self_attn.out_proj.default_index=0
-                if self.layers[i].encoder_attn is not None:
-                    self.layers[i].encoder_attn.k_proj.default_index=0
-                    self.layers[i].encoder_attn.v_proj.default_index=0
-                    self.layers[i].encoder_attn.q_proj.default_index=0
-                    self.layers[i].encoder_attn.out_proj.default_index=0
+            pass
                     
         elif method=="all":
             base_layer=self.layers[0]

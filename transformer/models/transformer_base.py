@@ -46,66 +46,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
-        # self. try_drop_default_index()
-    def try_drop_default_index(self):
-        if self.cfg.decoder.sharing_method=="all":
-            return
-        elif self.cfg.decoder.sharing_method=="none":
-            if self.cfg.encoder.enable_classifier:
-                
-                for i in range(0,self.cfg.encoder.classifier_encoder_layers):
-                    self.encoder.next_steps_classifier.encoder.layers[i].load_state_dict(self.encoder.layers[i].state_dict())
-                   
-                    
-            if self.cfg.decoder.enable_classifier:
-                start=max(0,self.cfg.encoder.classifier_encoder_layers-len(self.encoder.layers))
-                for i in range(start,self.cfg.decoder.classifier_encoder_layers):
-                    
-                    self.encoder.next_steps_classifier.encoder.layers[i-start].load_state_dict(self.encoder.layers[i].state_dict())
-                   
-                # copy_from=self.cfg.encoder.classifier_encoder_layers[i]
-                # copy_to=self.cfg.decoder.classifier_decoder_layers[i]
-                # self.encoder.next_steps_classifier.layers[i]=self.encoder.layers[i]
-                
-                # if self.cfg.encoder.fc1_selection_index is not None:
-                #     self.layers[i].fc1.fill_with_default_index()
-                #     self.layers[i].default_index=None
-                # if self.cfg.encoder.fc2_selection_index is not None:
-                #     self.layers[i].fc2.fill_with_default_index()
-                #     self.layers[i].default_index=None
-                # if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
-                #     self.layers[i].self_attn.k_proj.fill_with_default_index()
-                #     self.layers[i].default_index=None
-                # if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
-                #     self.layers[i].self_attn.v_proj.fill_with_default_index()
-                #     self. layers[i].default_index=None
-                # if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
-                #     self.layers[i].self_attn.q_proj.fill_with_default_index()
-                #     self.layers[i].default_index=None
-                # if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
-                #     self.layers[i].self_attn.out_proj.fill_with_default_index()
-                #     self. layers[i].default_index=None
-        # self.set_epoch(1)
-        # if next_steps_classifier is None:
-            # next_steps_classifier=TransformerStepsClassifier(cfg,encoder,decoder)
-        # self.next_steps_classifier=next_steps_classifier
-        # encoder.next_steps_classifier=weakref.ref(next_steps_classifier)
-        # decoder.next_steps_classifier=weakref.ref(next_steps_classifier)
-        # self.next_steps_classifier=GamblerNextStepsClassifier(cfg)
-        # encoder.next_steps_classifier=TransformerEncoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
-        # decoder.next_steps_classifier=TransformerDecoderStepsClassifier(cfg,encoder.dictionary,encoder.embed_tokens,decoder.dictionary,decoder.embed_tokens)
-    # def set_last_loss(self, loss):
-    #     #loss=loss.detach()
-    #     #  def set_last_loss(self, loss):
-        
-        
-      
-    #     if hasattr(self.next_steps_classifier,"set_last_loss"):
-    #         self.next_steps_classifier.set_last_loss(loss)
-    # def set_epoch(self, epoch):
-    #     for m in self.modules():
-    #         if hasattr(m, "set_epoch") and m != self:
-    #             m.set_epoch(epoch)
+       
     @classmethod
     def add_args(cls, parser):
         """Add model-specific arguments to the parser."""

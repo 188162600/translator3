@@ -121,54 +121,16 @@ class TransformerEncoderBase(FairseqEncoder):
             self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
         else:
             self.layer_norm = None
-        # self.next_steps_classifier =torch.nn.Module()
-        #self.set_classifier_requires_grad(True)
+       
         self.build_sharing(cfg.encoder.sharing_method)
-        # if self.cfg.encoder.enable_classifier:
-        #     self.drop_default_index()
-    # def set_epoch(self, epoch):
-    #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
-    #         self.drop_default_index()
-            
-    #         print("encoder drop default index")
-    #     if hasattr(super(),"set_epoch"):
-    #         super().set_epoch(epoch)
-    def drop_default_index(self):
-        if self.cfg.encoder.sharing_method=="all":
-            return
-        elif self.cfg.encoder.sharing_method=="none":
-            for i in range(0,len(self.layers)):
-                if self.cfg.encoder.fc1_selection_index is not None:
-                    self.layers[i].fc1.fill_with_default_index()
-                    self.layers[i].default_index=None
-                if self.cfg.encoder.fc2_selection_index is not None:
-                    self.layers[i].fc2.fill_with_default_index()
-                    self.layers[i].default_index=None
-                if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
-                    self.layers[i].self_attn.k_proj.fill_with_default_index()
-                    self.layers[i].default_index=None
-                if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
-                    self.layers[i].self_attn.v_proj.fill_with_default_index()
-                    self. layers[i].default_index=None
-                if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
-                    self.layers[i].self_attn.q_proj.fill_with_default_index()
-                    self.layers[i].default_index=None
-                if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
-                    self.layers[i].self_attn.out_proj.fill_with_default_index()
-                    self. layers[i].default_index=None
-           
+    
                
                     
         
     def build_sharing(self,method):
         if method=="none":
             for i in range(0,len(self.layers)):
-                self.layers[i].fc1.default_index=0
-                self.layers[i].fc2.default_index=0
-                self .layers[i].self_attn.k_proj.default_index=0
-                self.layers[i].self_attn.v_proj.default_index=0
-                self.layers[i].self_attn.q_proj.default_index=0
-                self.layers[i].self_attn.out_proj.default_index=0
+                pass
                 
         if method=="all":
             base_layer=self.layers[0]
@@ -475,7 +437,21 @@ class TransformerEncoderBase(FairseqEncoder):
             self.normalize = False
             state_dict[version_key] = torch.Tensor([1])
         return state_dict
-
+    # def upgrade_share_all_state_dict_named(self, state_dict, name):
+    #     for i in range(0, self.num_layers):
+            
+    #         for layer in ("fc1", "fc2","self_attn.k_proj","self_attn.v_proj","self_attn.q_proj","self_attn.out_proj"):
+            
+            
+    #             weight_key=f"{name}.layers.{i}.{layer}.weight"
+    #             bias_key=f"{name}.layers.{i}.{layer}.bias"
+    #             weight=state_dict[weight_key]
+    #             bias=state_dict[bias_key]
+    #             if self.layers[i].is
+                
+                
+               
+           
 class TransformerEncoder(TransformerEncoderBase):
     def __init__(self, cfg, dictionary, embed_tokens, return_fc=False):
     #self.args = args

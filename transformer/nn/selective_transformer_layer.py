@@ -105,12 +105,12 @@ class SelectiveTransformerEncoderLayerBase(nn.Module):
     #     )
     def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,), p=q_noise, block_size=qn_block_size
         )
 
     def build_fc2(self, total_options,num_options,input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,), p=q_noise, block_size=qn_block_size
         )
 
     def _get_fc_rank(self, remove_num: int) -> List[int]:
@@ -652,12 +652,12 @@ class SelectiveTransformerDecoderLayerBase(nn.Module):
     #     return quant_noise(nn.Linear(input_dim, output_dim), q_noise, qn_block_size)
     def build_fc1(self,total_options,num_options, input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,), p=q_noise, block_size=qn_block_size
         )
 
     def build_fc2(self,total_options, num_options,input_dim, output_dim, q_noise, qn_block_size,index):
         return quant_noise(
-            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,default_index=index), p=q_noise, block_size=qn_block_size
+            SelectiveLinear(total_options,num_options,input_dim, output_dim,batch_index=1,), p=q_noise, block_size=qn_block_size
         )
         
     def build_self_attention(
