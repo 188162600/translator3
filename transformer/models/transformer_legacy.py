@@ -302,7 +302,7 @@ def transformer_wmt_en_de(args):
     base_architecture(args)
     
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_shared")
-def transformer_wmt_en_de(args):
+def transformer_wmt_en_de_shared(args):
     args.encoder_options_each_layer=10
     args.encoder_total_options=10
     args.encoder_sharing_method="all"
