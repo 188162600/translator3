@@ -462,7 +462,7 @@ class TransformerStepsClassifier(torch.nn.Module):
         logits=logits.view(-1,self.encoder_decoder_layers,self.selective_layers,self.total_options)
         # logits.register_hook(lambda grad: print("classifier grad",grad.sum()))
         
-        logits=logits.softmax(dim=-1)
+        # logits=logits.softmax(dim=-1)
         # logits.register_hook(lambda grad: print("classifier grad2",grad.sum()))
         
         return NextSteps(logits,self.cfg)
