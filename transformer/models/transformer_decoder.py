@@ -167,8 +167,8 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.build_output_projection(cfg, dictionary, embed_tokens)
         # self.set_classifier_requires_grad(True)
         self.build_sharing(cfg.decoder.sharing_method)
-        if self.cfg.encoder.enable_classifier:
-            self.drop_default_index()
+        # if self.cfg.encoder.enable_classifier:
+        #     self.drop_default_index()
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -206,12 +206,12 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 ((i + 1) * cfg.decoder.layers) // (num_base_layers + 1),
                 BaseLayer(cfg),
             )
-    def set_epoch(self, epoch):
-        if self.cfg.encoder.classifier_learn_epoch>=epoch:
-            print("decoder drop default index")
-            self.drop_default_index()
-        if hasattr(super(),"set_epoch"):
-            super().set_epoch(epoch)
+    # def set_epoch(self, epoch):
+    #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
+    #         print("decoder drop default index")
+    #         self.drop_default_index()
+    #     if hasattr(super(),"set_epoch"):
+    #         super().set_epoch(epoch)
     def drop_default_index(self):
         if self.cfg.decoder.sharing_method=="all":
             return

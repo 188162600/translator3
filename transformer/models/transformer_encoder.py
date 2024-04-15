@@ -124,8 +124,8 @@ class TransformerEncoderBase(FairseqEncoder):
         # self.next_steps_classifier =torch.nn.Module()
         #self.set_classifier_requires_grad(True)
         self.build_sharing(cfg.encoder.sharing_method)
-        if self.cfg.encoder.enable_classifier:
-            self.drop_default_index()
+        # if self.cfg.encoder.enable_classifier:
+        #     self.drop_default_index()
     # def set_epoch(self, epoch):
     #     if self.cfg.encoder.classifier_learn_epoch>=epoch:
     #         self.drop_default_index()

@@ -46,7 +46,7 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
         super().__init__(encoder, decoder)
         self.cfg = cfg
         self.supports_align_args = True
-        self. try_drop_default_index()
+        # self. try_drop_default_index()
     def try_drop_default_index(self):
         if self.cfg.decoder.sharing_method=="all":
             return
