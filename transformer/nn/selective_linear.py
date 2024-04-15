@@ -139,11 +139,39 @@ class SelectiveLinear(Module):
 
     def extra_repr(self) -> str:
         return f'total_options={self.total_options}, num_options={self.num_options}, in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
-    def get_non_selective_params_data(self):
-        if self.is_non_selective:
-            return [self.weight.data,self.bias.data if self.bias is not None else None]
-        assert self.default_index is not None
-        return [self.weight.data[self.default_index],self.bias.data[self.default_index] if self.bias is not None else None]
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        if self.default_index is not None:
+            weight_key = prefix + 'weight'
+            bias_key = prefix + 'bias'
+            destination[weight_key] = self.weight[self.default_index] if keep_vars else self.weight.data[self.default_index]
+            destination[bias_key] = self.bias[self.default_index] if self.bias is not None else None
+        else:
+            return super()._save_to_state_dict(destination, prefix, keep_vars)
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs):
+        if not self.is_non_selective:
+            weight_key = prefix + 'weight'
+            bias_key = prefix + 'bias'
+            if state_dict[weight_key].dim()==2:
+                state_dict[weight_key]=state_dict[weight_key].unsqueeze(0).repeat(self.total_options,1,1)
+            if state_dict[bias_key] is not None and state_dict[bias_key].dim()==1:
+                state_dict[bias_key]=state_dict[bias_key].unsqueeze(0).repeat(self.total_options,1)
+                
+        
+        return super()._load_from_state_dict(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
+            
+            
+    # def get_non_selective_params_data(self):
+    #     if self.is_non_selective:
+    #         return [self.weight.data,self.bias.data if self.bias is not None else None]
+    #     assert self.default_index is not None
+    #     return [self.weight.data[self.default_index],self.bias.data[self.default_index] if self.bias is not None else None]
+    # def _save_to_state_dict(self,destination, prefix, keep_vars):
+    #     weight_key = prefix + 'weight'
+    #     bias_key = prefix + 'bias'
+    #     if self.is_non_selective:
+    #         destination[weight_key] = self.weight if keep_vars else self.weight.data
+    #         destination[bias_key] = self.bias if keep_vars else self.bias.data
+        
     # def _save_to_state_dict(self, destination, prefix, keep_vars):
     #     weight_key = prefix + 'weight'
     #     weights_key = prefix + 'weights'

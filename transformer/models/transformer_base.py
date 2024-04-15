@@ -54,27 +54,15 @@ class TransformerModelBase(FairseqEncoderDecoderModel):
             if self.cfg.encoder.enable_classifier:
                 
                 for i in range(0,self.cfg.encoder.classifier_encoder_layers):
-                    copy_from=self.encoder.layers[i]
-                    copy_to=self.encoder.next_steps_classifier.encoder.layers[i]
-                    copy_to.fc1.weight.data,copy_to.fc1.bias.data=copy_from.fc1.get_non_selective_params_data()
-                    copy_to.fc2.weight.data,copy_to.fc2.bias.data=copy_from.fc2.get_non_selective_params_data()
-                    copy_to.self_attn.k_proj.weight.data,copy_to.self_attn.k_proj.bias.data=copy_from.self_attn.k_proj.get_non_selective_params_data()
-                    copy_to.self_attn.v_proj.weight.data,copy_to.self_attn.v_proj.bias.data=copy_from.self_attn.v_proj.get_non_selective_params_data()
-                    copy_to.self_attn.q_proj.weight.data,copy_to.self_attn.q_proj.bias.data=copy_from.self_attn.q_proj.get_non_selective_params_data()
-                    copy_to.self_attn.out_proj.weight.data,copy_to.self_attn.out_proj.bias.data=copy_from.self_attn.out_proj.get_non_selective_params_data()
+                    self.encoder.next_steps_classifier.encoder.layers[i].load_state_dict(self.encoder.layers[i].state_dict())
+                   
                     
             if self.cfg.decoder.enable_classifier:
                 start=max(0,self.cfg.encoder.classifier_encoder_layers-len(self.encoder.layers))
                 for i in range(start,self.cfg.decoder.classifier_encoder_layers):
-                    copy_from=self.encoder.layers[i]
-                    copy_to=self.decoder.next_steps_classifier.encoder.layers[i-start]
-                    copy_to.fc1.weight.data,copy_to.fc1.bias.data=copy_from.fc1.get_non_selective_params_data()
-                    copy_to.fc2.weight.data,copy_to.fc2.bias.data=copy_from.fc2.get_non_selective_params_data()
-                    copy_to.self_attn.k_proj.weight.data,copy_to.self_attn.k_proj.bias.data=copy_from.self_attn.k_proj.get_non_selective_params_data()
-                    copy_to.self_attn.v_proj.weight.data,copy_to.self_attn.v_proj.bias.data=copy_from.self_attn.v_proj.get_non_selective_params_data()
-                    copy_to.self_attn.q_proj.weight.data,copy_to.self_attn.q_proj.bias.data=copy_from.self_attn.q_proj.get_non_selective_params_data()
-                    copy_to.self_attn.out_proj.weight.data,copy_to.self_attn.out_proj.bias.data=copy_from.self_attn.out_proj.get_non_selective_params_data()
-                 
+                    
+                    self.encoder.next_steps_classifier.encoder.layers[i-start].load_state_dict(self.encoder.layers[i].state_dict())
+                   
                 # copy_from=self.cfg.encoder.classifier_encoder_layers[i]
                 # copy_to=self.cfg.decoder.classifier_decoder_layers[i]
                 # self.encoder.next_steps_classifier.layers[i]=self.encoder.layers[i]
