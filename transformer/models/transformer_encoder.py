@@ -132,7 +132,7 @@ class TransformerEncoderBase(FairseqEncoder):
             for i in range(0,len(self.layers)):
                 pass
                 
-        if method=="all":
+        elif method=="all":
             base_layer=self.layers[0]
             for i in range(1,len(self.layers)):
                 if self.cfg.encoder.fc1_selection_index is not None:
@@ -153,7 +153,34 @@ class TransformerEncoderBase(FairseqEncoder):
                 if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
                     self.layers[i].self_attn.out_proj=base_layer.self_attn.out_proj
                     
-             
+        elif method=="everywhere":
+            base_layer=self.layers[0]
+            for i in range(0,len(self.layers)):
+                if self.cfg.encoder.fc1_selection_index is not None:
+                    print("encoder fc",self.layers[i].fc1)
+                    self.layers[i].fc1=base_layer.fc1
+                   
+                if self.cfg.encoder.fc2_selection_index is not None:
+                    print("encoder fc2",self.layers[i].fc2)
+                    self.layers[i].fc2=base_layer.fc2
+                   
+                if self.cfg.encoder.self_attn_k_proj_selection_index is not None:
+                    # print(self.layers[i].self_attn.k_proj)
+                    print("encoder k_proj",self.layers[i].self_attn.k_proj)
+                    self.layers[i].self_attn.k_proj=base_layer.self_attn.k_proj
+                   
+                if self.cfg.encoder.self_attn_v_proj_selection_index is not None:
+                    print("encoder v_proj",self.layers[i].self_attn.v_proj)
+                    self.layers[i].self_attn.v_proj=base_layer.self_attn.k_proj
+                   
+                if self.cfg.encoder.self_attn_q_proj_selection_index is not None:
+                    print("encoder q_proj",self.layers[i].self_attn.q_proj)
+                    self.layers[i].self_attn.q_proj=base_layer.self_attn.k_proj
+                   
+                if self.cfg.encoder.self_attn_out_proj_selection_index is not None:
+                    print("encoder out_proj",self.layers[i].self_attn.out_proj)
+                    self.layers[i].self_attn.out_proj=base_layer.self_attn.k_proj
+                   
                 
                 
     def build_selective_encoder_layer(self, cfg,index):

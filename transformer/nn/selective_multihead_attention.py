@@ -131,17 +131,17 @@ class SelectiveMultiheadAttention(FairseqIncrementalDecoder):
         )
 
         self.k_proj = quant_noise(
-            SelectiveLinear(k_proj_total_options,k_proj_num_options,self.kdim, embed_dim, bias=bias,batch_index=1,), q_noise, qn_block_size
+            SelectiveLinear(k_proj_total_options,k_proj_num_options,self.kdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
         self.v_proj = quant_noise(
-            SelectiveLinear (v_proj_total_options,v_proj_num_options,self.vdim, embed_dim, bias=bias,batch_index=1,), q_noise, qn_block_size
+            SelectiveLinear (v_proj_total_options,v_proj_num_options,self.vdim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
         self.q_proj = quant_noise(
-            SelectiveLinear(q_proj_total_options,q_proj_num_options,embed_dim, embed_dim, bias=bias,batch_index=1,), q_noise, qn_block_size
+            SelectiveLinear(q_proj_total_options,q_proj_num_options,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
 
         self.out_proj = quant_noise(
-            SelectiveLinear(out_proj_total_options,out_proj_num_options ,embed_dim, embed_dim, bias=bias,batch_index=1,), q_noise, qn_block_size
+            SelectiveLinear(out_proj_total_options,out_proj_num_options ,embed_dim, embed_dim, bias=bias,batch_index=1), q_noise, qn_block_size
         )
 
 

@@ -24,6 +24,7 @@ from fairseq.modules import (
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
+from ..nn.zero_lowest_k import zero_lowest_k
 # import logging
 # logger=logging.getLogger(__name__)
 
@@ -449,7 +450,7 @@ class TransformerStepsClassifier(torch.nn.Module):
         self.cfg = cfg
         self.encoder_decoder_layers=cfg.encoder.layers+cfg.decoder.layers
         self.selective_layers=classifier_cfg.selective_layers
-        self. total_options=classifier_cfg. total_options
+        self. total_options= classifier_cfg. max_total_options
         self.classifier_layer = nn.Linear(cfg.encoder.embed_dim,self.encoder_decoder_layers*self.total_options*self.selective_layers)
         self.classifier_cfg = classifier_cfg
         self.enable=classifier_cfg.enable_classifier
@@ -461,7 +462,7 @@ class TransformerStepsClassifier(torch.nn.Module):
         logits=self.classifier_layer(features)
         logits=logits.view(-1,self.encoder_decoder_layers,self.selective_layers,self.total_options)
         # logits.register_hook(lambda grad: print("classifier grad",grad.sum()))
-        
+        # logits=zero_lowest_k(logits,self.classifier_cfg.options_each_layer,dim=-1)
         logits=logits.softmax(dim=-1)
         # logits.register_hook(lambda grad: print("classifier grad2",grad.sum()))
         

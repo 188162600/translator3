@@ -303,15 +303,31 @@ def transformer_wmt_en_de(args):
     
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_shared")
 def transformer_wmt_en_de_shared(args):
-    args.encoder_options_each_layer=10
-    args.encoder_total_options=10
+    args.encoder_options_each_layer=4
+    args.encoder_fc_total_options=10
+    args.encoder_attn_total_options=10
     args.encoder_sharing_method="all"
-    args.decoder_options_each_layer=10
-    args.decoder_total_options=10
+    args.decoder_options_each_layer=4
+    args.decoder_fc_total_options=10
+    args.decoder_attn_total_options=10
     args.decoder_sharing_method="all"
     
     base_architecture(args)
     
+    
+@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_shared_everywhere")
+def transformer_wmt_en_de_shared(args):
+    args.encoder_options_each_layer=4
+    args.encoder_fc_total_options=int(6*2*1.5)
+    args.encoder_attn_total_options=int(6*4*1.5)
+    args.encoder_sharing_method="everywhere"
+    args.decoder_options_each_layer=4
+    args.decoder_fc_total_options=int(6*2*1.5)
+    args.decoder_attn_total_options=int(6*8*1.5)
+
+    args.decoder_sharing_method="everywhere"
+    
+    base_architecture(args)
     #   options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
     # total_options:int=field(default=4,metadata={"help":"total number of options"}) 
 
