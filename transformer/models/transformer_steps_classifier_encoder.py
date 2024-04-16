@@ -463,9 +463,10 @@ class TransformerStepsClassifier(torch.nn.Module):
         logits=logits.view(-1,self.encoder_decoder_layers,self.selective_layers,self.total_options)
         # logits.register_hook(lambda grad: print("classifier grad",grad.sum()))
         logits=zero_lowest_k(logits,self.classifier_cfg.total_options-self.classifier_cfg.options_each_layer ,dim=-1)
-        logits=torch.zeros_like(logits)
-        logits[:,0]=1
-        logits[:,1:]=0
+        # logits=torch.zeros_like(logits)
+        # logits[:,0]=1
+        # logits[:,1:]=0
+        logits=torch.ones_like(logits)
         # logits=logits.softmax(dim=-1)
         # print("logits",logits)
         # epsilon = 1e-5
