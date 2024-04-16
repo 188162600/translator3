@@ -466,8 +466,8 @@ class TransformerStepsClassifier(torch.nn.Module):
         # logits=torch.zeros_like(logits)
         # logits[:,0]=1
         # logits[:,1:]=0
-        logits=torch.ones_like(logits)
-        logits=logits.softmax(dim=-1)
+        # logits=torch.ones_like(logits)
+        # logits=logits.softmax(dim=-1)
         # logits=logits.softmax(dim=-1)
         # print("logits",logits)
         # epsilon = 1e-5
@@ -482,6 +482,11 @@ class TransformerStepsClassifier(torch.nn.Module):
         
     def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
         # print("enable" ,self.enable)
+        batch=src_tokens.shape[1]
+        result= torch.zeros(batch,self.encoder_decoder_layers,self.selective_layers,self.total_options).to(src_tokens.device)
+        result[:,:,:,0]=1
+        result[:,:,:,1:]=0
+        return NextSteps(result,self.cfg)
         if not self.enable:
             return NextSteps(None,self.cfg)
         prev_encoder_out=previous_encode["encoder_out"][0] if previous_encode is not None else None
