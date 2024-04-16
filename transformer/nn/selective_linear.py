@@ -124,13 +124,16 @@ class SelectiveLinear(Module):
         weight_key = prefix + 'weight'
         bias_key = prefix + 'bias'
         if weight_key in state_dict:
+           
             weight=state_dict[weight_key]
             if weight.dim()==2 and not self.is_non_selective:
+                print("expanding weights")
                 weight=weight.unsqueeze(0).repeat(self.total_options,1,1)
             state_dict[weight_key]=weight
         if bias_key in state_dict:
             bias=state_dict[bias_key]
             if bias is not None and bias.dim()==1 and not self.is_non_selective:
+                print("expanding bias")
                 bias=bias.unsqueeze(0).repeat(self.total_options,1)
             state_dict[bias_key]=bias
                 
