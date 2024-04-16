@@ -224,3 +224,4 @@ class TransformerEncoderLayerBase(nn.Module):
         if self.return_fc and not torch.jit.is_scripting():
             return x, fc_result
         return x
+
