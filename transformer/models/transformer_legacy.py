@@ -300,9 +300,41 @@ def transformer_iwslt_de_en(args):
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de")
 def transformer_wmt_en_de(args):
     base_architecture(args)
+@register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_non_selective")
+def transformer_wmt_en_de_non_selective(args):
+    
+    args.encoder_options_each_layer=getattr(args, "encoder_options_each_layer", 4)
+    args.encoder_total_options=getattr(args, "encoder_total_options", 10)
+    args.encoder_sharing_method=getattr(args, "encoder_sharing_method", "none")
+    args.encoder_enable_classifier=getattr(args, "encoder_enable_classifier", False)
+    args.encoder_fc1_selection_index=getattr(args, "encoder_fc1_selection_index", None)
+    args.encoder_fc2_selection_index=getattr(args, "encoder_fc2_selection_index", None)
+    args.encoder_self_attn_k_proj_selection_index=getattr(args, "encoder_self_attn_k_proj_selection_index", None)
+    args.encoder_self_attn_v_proj_selection_index=getattr(args, "encoder_self_attn_v_proj_selection_index", None)
+    args.encoder_self_attn_q_proj_selection_index=getattr(args, "encoder_self_attn_q_proj_selection_index", None)
+    args.encoder_self_attn_out_proj_selection_index=getattr(args, "encoder_self_attn_out_proj_selection_index", None)
+    
+    
+    args.decoder_options_each_layer=getattr(args, "decoder_options_each_layer", 4)
+    args.decoder_total_options=getattr(args, "decoder_total_options", 10)
+    args.decoder_sharing_method=getattr(args, "decoder_sharing_method", "none")
+    args.decoder_enable_classifier=getattr(args, "decoder_enable_classifier", False)
+    args.decoder_fc1_selection_index=getattr(args, "decoder_fc1_selection_index", None)
+    args.decoder_fc2_selection_index=getattr(args, "decoder_fc2_selection_index", None)
+    args.decoder_self_attn_k_proj_selection_index=getattr(args, "decoder_self_attn_k_proj_selection_index", None)
+    args.decoder_self_attn_v_proj_selection_index=getattr(args, "decoder_self_attn_v_proj_selection_index", None)
+    args.decoder_self_attn_q_proj_selection_index=getattr(args, "decoder_self_attn_q_proj_selection_index", None)
+    args.decoder_self_attn_out_proj_selection_index=getattr(args, "decoder_self_attn_out_proj_selection_index", None)
+    args.decoder_encoder_attn_k_proj_selection_index=getattr(args, "decoder_encoder_attn_k_proj_selection_index", None)
+    args.decoder_encoder_attn_v_proj_selection_index=getattr(args, "decoder_encoder_attn_v_proj_selection_index", None)
+    args.decoder_encoder_attn_q_proj_selection_index=getattr(args, "decoder_encoder_attn_q_proj_selection_index", None)
+    args.decoder_encoder_attn_out_proj_selection_index=getattr(args, "decoder_encoder_attn_out_proj_selection_index", None)
+    base_architecture(args)
+    
     
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_shared")
 def transformer_wmt_en_de_shared(args):
+    
     args.encoder_options_each_layer=4
     args.encoder_total_options=10
     args.encoder_sharing_method="all"
