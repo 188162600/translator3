@@ -465,7 +465,7 @@ class TransformerStepsClassifier(torch.nn.Module):
         logits=zero_lowest_k(logits,self.classifier_cfg.options_each_layer,dim=-1)
         logits=logits.softmax(dim=-1)
         # logits.register_hook(lambda grad: print("classifier grad2",grad.sum()))
-        
+        print("logits",logits)
         return NextSteps(logits,self.cfg)
     # def set_epoch(self,epoch):
     #     self.enable= epoch>=self.classifier_cfg.classifier_enable_epoch
