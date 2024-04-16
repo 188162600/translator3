@@ -483,7 +483,7 @@ class TransformerStepsClassifier(torch.nn.Module):
     def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
         # print("enable" ,self.enable)
         batch=src_tokens.shape[0] if src_tokens is not None else previous_encode["encoder_out"][0].shape[1]
-        result= torch.zeros(batch,self.encoder_decoder_layers,self.selective_layers,self.total_options).to(src_tokens.device)
+        result= torch.zeros(batch,self.encoder_decoder_layers,self.selective_layers,self.total_options).to(src_tokens.device if src_tokens is not None else previous_encode["encoder_out"][0].device)
         result=torch.softmax(result,dim=-1)
         return NextSteps(result,self.cfg)
         if not self.enable:
