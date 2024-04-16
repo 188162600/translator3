@@ -84,8 +84,9 @@ class SelectiveLinear(Module):
         if self.is_non_selective:
             # print("non selective")
             return torch.nn.functional.linear(x, self.weight, self.bias)
-        selection_probs=selection_probs.narrow(-1,0,self.total_options)
-        selection_probs=zero_lowest_k(selection_probs,self.total_options-self.num_options,-1)
+        # selection_probs=selection_probs.narrow(-1,0,self.total_options)
+        
+        # selection_probs=zero_lowest_k(selection_probs,self.total_options-self.num_options,-1)
         # selection_probs=zero_lowest_k(selection_probs,self.total_options-self.num_options,-1)
         
         # selection_probs=torch.where(selection_probs<0.05,torch.zeros_like(selection_probs),selection_probs)

@@ -32,6 +32,7 @@ def _get_total_options(sharing_method:str,num_total,num_shared,num_non_shared,nu
 from fairseq.dataclass import FairseqDataclass
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
+    
     fc1_selection_index:int=0
     fc2_selection_index:int=1
     self_attn_k_proj_selection_index:int=2
@@ -75,11 +76,12 @@ class EncDecBaseConfig(FairseqDataclass):
         },
     )
     options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
-    fc_total_options:int=field(default=4,metadata={"help":"number of options each layer"})
-    attn_total_options:int=field(default=4,metadata={"help":"total number of options"})
-    @property
-    def max_total_options(self):
-        return max(self.fc_total_options,self.attn_total_options)
+    total_options:int=field(default=4,metadata={"help":"total number of options"})
+    # total_options:int=field(default=4,metadata={"help":"number of options each layer"})
+    # total_options:int=field(default=4,metadata={"help":"total number of options"})
+    # @property
+    # def max_total_options(self):
+    #     return max(self.total_options,self.total_options)
     # attn_options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
     sharing_method:str=field(default="none",metadata={"help":"sharing method","choices":["none","all",]})
     
