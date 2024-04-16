@@ -20,12 +20,12 @@ from fairseq.modules import (
     LayerNorm,
     PositionalEmbedding,
     SinusoidalPositionalEmbedding,
-    
+    transformer_layer
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 from ..nn.zero_lowest_k import zero_lowest_k
-from ..nn import transformer_layer
+# from ..nn import transformer_layer
 # import logging
 # logger=logging.getLogger(__name__)
 
