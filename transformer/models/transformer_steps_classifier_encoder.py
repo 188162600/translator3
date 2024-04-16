@@ -25,7 +25,7 @@ from fairseq.modules import (
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 from ..nn.zero_lowest_k import zero_lowest_k
-from ..nn.transformer_layer import TransformerEncoderLayerBase
+from ..nn import transformer_layer
 # import logging
 # logger=logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class TransformerStepsClassifierEncoderBase(FairseqEncoder):
             self.layer_norm = None
 
     def build_encoder_layer(self, cfg):
-        layer = TransformerEncoderLayerBase(
+        layer = transformer_layer.TransformerEncoderLayerBase(
             cfg, return_fc=self.return_fc
         )
         checkpoint = cfg.checkpoint_activations
