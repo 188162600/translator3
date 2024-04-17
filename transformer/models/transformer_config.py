@@ -85,7 +85,8 @@ class EncDecBaseConfig(FairseqDataclass):
     # attn_options_each_layer:int=field(default=4,metadata={"help":"number of options each layer"})
     sharing_method:str=field(default="none",metadata={"help":"sharing method","choices":["none","all",]})
     
-    classifier_encoder_layers:int=field(default=4,metadata={"help":"number of classifier layers in encoder"})
+    classifier_encoder_layers:int=field(default=3,metadata={"help":"number of classifier layers in encoder"})
+    classifier_decoder_layers:int=field(default=3,metadata={"help":"number of classifier layers in encoder"})
     @property
     def selective_layers(self):
         return max(self.fc1_selection_index,self.fc2_selection_index,

@@ -27,7 +27,7 @@ from fairseq.modules import (
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
-from ..models.transformer_steps_classifier_encoder import NextSteps,TransformerStepsClassifier
+from ..models.transformer_steps_classifier import NextSteps,TransformerStepsClassifier
 # rewrite name for backward compatibility in `make_generation_fast_`
 def module_name_fordropout(module_name: str) -> str:
     if module_name == "TransformerEncoderBase":
@@ -110,7 +110,7 @@ class TransformerEncoderBase(FairseqEncoder):
         #         for i in range(cfg.encoder.layers)
         #     ]
         self.layers.extend(
-            [self.build_selective_encoder_layer(cfg,index) for index in range(cfg.encoder.selective_layers)]
+            [self.build_selective_encoder_layer(cfg,index) for index in range(cfg.encoder.layers)]
         )
         # self.layers.extend(
         #     [self.build_non_selective_encoder_layer(cfg) for i in range(cfg.encoder.non_selective_layers)]

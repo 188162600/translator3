@@ -23,7 +23,7 @@ from ..nn.confidence_loss import confidence_loss
 
 from ..models.transformer_config import TransformerConfig
 
-from ..models.transformer_steps_classifier_encoder import NextSteps,TransformerStepsClassifier
+from ..models.transformer_steps_classifier import NextSteps,TransformerStepsClassifier
 # from fairseq.models.transformer import TransformerConfig
 from fairseq.modules import (
     AdaptiveSoftmax,
@@ -139,7 +139,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             [
                 self.build_selective_decoder_layer(cfg, no_encoder_attn,index=index)
                 # shared_layer
-                for index in range(cfg.decoder.selective_layers)
+                for index in range(cfg.decoder.layers)
             ]
         )
         # self.layers.extend(
@@ -480,6 +480,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
         for idx, layer in enumerate(self.layers):
+            # print("decoder layer",idx)
             if incremental_state is None and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
             else:
@@ -608,7 +609,7 @@ class TransformerDecoder(TransformerDecoderBase):
             no_encoder_attn=no_encoder_attn,
             output_projection=output_projection,
         )
-        self.next_steps_classifier=TransformerStepsClassifier(cfg,cfg.decoder,None,None)
+        self.next_steps_classifier=TransformerStepsClassifier(cfg,cfg.decoder,dictionary,embed_tokens)
     # @torch.jit.ignore
     def forward( self,
         prev_output_tokens,

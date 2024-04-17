@@ -39,7 +39,7 @@ class SelectiveLinear(Module):
             self.register_parameter('bias', None)
         self.reset_parameters()
         self.batch_index = batch_index
-        self.activation=torch.nn.LeakyReLU(0.2)
+        # self.activation=torch.nn.LeakyReLU(0.2)
         
     def get_batched_weights_biases(self, selection_logits, temperature=1.0):
         assert selection_logits.dim() == 2
@@ -102,7 +102,7 @@ class SelectiveLinear(Module):
             x = x.transpose(0, self.batch_index)
         
         transformed = torch.einsum('nij,baj->bani', self.weight, x) 
-        transformed=self.activation(transformed)
+        # transformed=self.activation(transformed)
         final_output = torch.einsum('bani,bn->bai', transformed, selection_probs)
         
         
@@ -110,7 +110,7 @@ class SelectiveLinear(Module):
         if self.bias is not None:
             # Compute the weighted sum of biases using the selection probabilities
             weighted_biases = torch.einsum('ni,bn->bi', self.bias, selection_probs)
-            weighted_biases=self.activation(weighted_biases)
+            # weighted_biases=self.activation(weighted_biases)
             # weighted_biases=self.activation(weighted_biases)
             # Add the weighted biases to the final output
             final_output += weighted_biases.unsqueeze(1).expand(-1, x.size(1), -1)
