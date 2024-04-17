@@ -468,7 +468,7 @@ class TransformerStepsClassifier(torch.nn.Module):
         # logits[:,0]=1
         # logits[:,1:]=0
         # logits=torch.ones_like(logits)
-        logits=logits.softmax(dim=-1)
+        # logits=logits.softmax(dim=-1)
         # logits=logits.softmax(dim=-1)
         # print("logits",logits)
         # epsilon = 1e-5
