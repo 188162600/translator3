@@ -380,6 +380,7 @@ class TransformerEncoderBase(FairseqEncoder):
             "fc_results": fc_results,  # List[T x B x C]
             "src_tokens": [],
             "src_lengths": [src_lengths],
+            "classifier_out":[next_steps.logits]
         }
 
     @torch.jit.export
@@ -395,10 +396,13 @@ class TransformerEncoderBase(FairseqEncoder):
             *encoder_out* rearranged according to *new_order*
         """
         # print(new_order)
+        
         if len(encoder_out["encoder_out"]) == 0:
             new_encoder_out = []
         else:
+            # print(encoder_out["encoder_out"][0].shape,new_order.shape,)
             new_encoder_out = [encoder_out["encoder_out"][0].index_select(1, new_order)]
+            # print(new_encoder_out[0].shape)
         if len(encoder_out["encoder_padding_mask"]) == 0:
             new_encoder_padding_mask = []
         else:
@@ -421,7 +425,11 @@ class TransformerEncoderBase(FairseqEncoder):
             src_lengths = []
         else:
             src_lengths = [(encoder_out["src_lengths"][0]).index_select(0, new_order)]
-
+        if len(encoder_out["classifier_out"]) == 0:
+            classifier_out = []
+        else:
+            classifier_out = [(encoder_out["classifier_out"][0]).index_select(0, new_order)]
+        
         encoder_states = encoder_out["encoder_states"]
         if len(encoder_states) > 0:
             for idx, state in enumerate(encoder_states):
@@ -435,6 +443,7 @@ class TransformerEncoderBase(FairseqEncoder):
             "encoder_states": encoder_states,  # List[T x B x C]
             "src_tokens": src_tokens,  # B x T
             "src_lengths": src_lengths,  # B x 1
+            "classifier_out":classifier_out
             
         }
 

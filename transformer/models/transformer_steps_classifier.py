@@ -124,7 +124,9 @@ class NextSteps:
             return None
         return self.logits[:,self.index,self.encoder_decoder_cfg.encoder_attn_out_proj_selection_index]
         
-
+class Task:
+    def __init__(self) -> None:
+        self.hidden_long_term=dict()
 
 class TransformerStepsClassifier(torch.nn.Module):
     def __init__(self, cfg, classifier_cfg,dictionary, embed_tokens, return_fc=False):
@@ -144,73 +146,28 @@ class TransformerStepsClassifier(torch.nn.Module):
         
         self.classifier_cfg = classifier_cfg
         self.enable=classifier_cfg.enable_classifier
+        self.task=Task()
         # print("classifier enable",self.enable)
         
     def output_layer(self,features:Tensor):
-        # print("features",features.shape)
-        # features=features.mean(dim=1)
-        logits=self.classifier_layer(features)
-        # print("logits",logits.shape)
-        logits=logits.view(-1,self.steps,self.selective_layers,self.total_options)
-        # print("logits",logits.shape)
-        # logits.register_hook(lambda grad: print("classifier grad",grad.sum()))
+        logits=features
         logits=zero_lowest_k(logits,self.classifier_cfg.total_options-self.classifier_cfg.options_each_layer ,dim=-1)
-        # logits=torch.zeros_like(logits)
-        # logits[:,0]=1
-        # logits[:,1:]=0
-        # logits=torch.ones_like(logits)
-        # logits=logits.softmax(dim=-1)
-        # logits=logits.softmax(dim=-1)
-        # print("logits",logits)
-        # epsilon = 1e-5
-        # logits=logits/(logits. sum(dim=-1,keepdim=True)+epsilon)
-    
-        # logits.register_hook(lambda grad: print("classifier grad2",grad.sum()))
-        # print("logits",logits)
-        return NextSteps(logits,self.cfg)
-    def decode_steps(self, encode_out):
-        # if self.decoder is None:
-        #     return encode_out["encoder_out"][0].
-        incremental_state = {}
        
-        batch = encode_out["encoder_out"][0].shape[1]
-        # Initialize `previous_encode` with zeros, of appropriate dimension and device
-        previous_tokens = torch.zeros(batch, 1, self.cfg.decoder.embed_dim, device=encode_out["encoder_out"][0].device)
-    
-        for i in range(self.steps):
-            # Decode one step at a time, updating `incremental_state`
-            logits, _ = self.decoder(
-                previous_tokens, 
-                encode_out,
-                incremental_state=incremental_state,
-            )
-            next_token = logits.mean(dim=1).unsqueeze(1)
-            # print(abs(next_token[:,:i,:]-previous_tokens[:,:i,:]).sum())
-            # print("next_token",next_token.shape)
-            # print("previous_tokens",previous_tokens.shape)
-            previous_tokens = torch.cat([previous_tokens, next_token], dim=1)
-            
-            # print(previous_encode[0,:,0])
-            
-          
-        
-        return previous_tokens[:,1:,:]
+        return NextSteps(logits,self.cfg)
+   
 
-    
-    def adjust_encoder_out_seq_length(self,out):
-        pass
+   
     def forward(self,src_tokens:Optional[Tensor]=None,src_lengths:Optional[torch.Tensor]=None,previous_encode:Optional[Dict]=None):
-        # print("enable" ,self.enable)
-        # batch=src_tokens.shape[0] if src_tokens is not None else previous_encode["encoder_out"][0].shape[1]
-        # result= torch.zeros(batch,self.encoder_decoder_layers,self.selective_layers,self.total_options).to(src_tokens.device if src_tokens is not None else previous_encode["encoder_out"][0].device)
-        # result=torch.softmax(result,dim=-1)
-        # return NextSteps(result,self.cfg)
+        
         if not self.enable:
             return NextSteps(None,self.cfg)
         prev_encoder_out=previous_encode["encoder_out"][0] if previous_encode is not None else None
         encoder_mask=previous_encode["encoder_padding_mask"][0] if previous_encode is not None else None
         encode_out=self.encoder(src_tokens,src_lengths,previous_encode=prev_encoder_out,padding_mask=encoder_mask)
-       
-        decode_out=self.decode_steps(encode_out)
+        encode_features=encode_out["encoder_out"][0]
+        encode_features=encode_features.transpose(0,1).mean(dim=1)
+        previous_classifier_out=previous_encode["classifier_out"][0] if previous_encode is not None else None
+        decode_out=self.decoder(encode_features,previous_classifier_out,self.task)
+        # decode_out=self.decode_steps(encode_features,previous_classifier_out,self.task)
         return self.output_layer(decode_out)
         
