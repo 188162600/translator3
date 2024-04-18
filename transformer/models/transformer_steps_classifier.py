@@ -177,21 +177,23 @@ class TransformerStepsClassifier(torch.nn.Module):
         # Initialize `previous_encode` with zeros, of appropriate dimension and device
         previous_tokens = torch.zeros(batch, 1, self.cfg.decoder.embed_dim, device=encode_out["encoder_out"][0].device)
     
-        for i in range(self.steps+1):
+        for i in range(self.steps):
             # Decode one step at a time, updating `incremental_state`
             logits, _ = self.decoder(
                 previous_tokens, 
                 encode_out,
                 incremental_state=incremental_state,
             )
-            next_token = logits[:, -1, :]
+            next_token = logits[:, -1, :].unsqueeze(1)
+            # print("next_token",next_token.shape)
+            # print("previous_tokens",previous_tokens.shape)
             previous_tokens = torch.cat([previous_tokens, next_token], dim=1)
             
             # print(previous_encode[0,:,0])
             
           
         
-        return previous_tokens
+        return previous_tokens[:,1:,:]
 
     
     def adjust_encoder_out_seq_length(self,out):
