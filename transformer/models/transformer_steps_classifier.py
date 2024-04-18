@@ -185,7 +185,7 @@ class TransformerStepsClassifier(torch.nn.Module):
                 incremental_state=incremental_state,
             )
             next_token = logits[:, -1, :]
-            input_tokens = torch.cat([input_tokens, next_token], dim=1)
+            previous_tokens = torch.cat([previous_tokens, next_token], dim=1)
             
             # print(previous_encode[0,:,0])
             
