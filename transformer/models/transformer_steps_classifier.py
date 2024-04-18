@@ -169,26 +169,29 @@ class TransformerStepsClassifier(torch.nn.Module):
         # print("logits",logits)
         return NextSteps(logits,self.cfg)
     def decode_steps(self, encode_out):
+        # if self.decoder is None:
+        #     return encode_out["encoder_out"][0].
         incremental_state = {}
-        # Assuming 'encoder_out' is a list where the first element is a tensor
+       
         batch = encode_out["encoder_out"][0].shape[1]
         # Initialize `previous_encode` with zeros, of appropriate dimension and device
-        previous_encode = torch.zeros(batch, self.steps, self.cfg.decoder.embed_dim, device=encode_out["encoder_out"][0].device)
-        
-        for i in range(self.steps):
+        previous_tokens = torch.zeros(batch, 1, self.cfg.decoder.embed_dim, device=encode_out["encoder_out"][0].device)
+    
+        for i in range(self.steps+1):
             # Decode one step at a time, updating `incremental_state`
-            previous_encode, incremental_state = self.decoder(
-                previous_encode,  # Detach to avoid backpropagation errors
+            logits, _ = self.decoder(
+                previous_tokens, 
                 encode_out,
                 incremental_state=incremental_state,
             )
+            next_token = logits[:, -1, :]
+            input_tokens = torch.cat([input_tokens, next_token], dim=1)
             
-            # print("Token Shape:", previous_encode.shape, "Previous Encode Shape:", previous_encode.shape,incremental_state)
+            # print(previous_encode[0,:,0])
             
-            # Concatenate the new token to the sequence of previous encodes
-            # previous_encode = torch.cat([previous_encode, token], dim=1)
+          
         
-        return previous_encode
+        return previous_tokens
 
     
     def adjust_encoder_out_seq_length(self,out):
