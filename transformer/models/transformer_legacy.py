@@ -299,6 +299,8 @@ def transformer_iwslt_de_en(args):
 
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de")
 def transformer_wmt_en_de(args):
+    args.encoder_layers = getattr(args, "encoder_layers", 9)
+    args.decoder_layers = getattr(args, "decoder_layers", 9)
     base_architecture(args)
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_non_selective")
 def transformer_wmt_en_de_non_selective(args):
