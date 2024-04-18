@@ -337,10 +337,10 @@ def transformer_wmt_en_de_non_selective(args):
 @register_model_architecture("meta_transformer", "meta_transformer_wmt_en_de_shared")
 def transformer_wmt_en_de_shared(args):
     
-    args.encoder_options_each_layer=4
+    args.encoder_options_each_layer=10
     args.encoder_total_options=10
     args.encoder_sharing_method="all"
-    args.decoder_options_each_layer=4
+    args.decoder_options_each_layer=10
     args.decoder_total_options=10
     args.decoder_sharing_method="all"
     
