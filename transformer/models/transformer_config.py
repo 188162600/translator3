@@ -89,8 +89,9 @@ class EncDecBaseConfig(FairseqDataclass):
     # classifier_decoder_layers:int=field(default=3,metadata={"help":"number of classifier layers in encoder"})
     @property
     def selective_layers(self):
-        return max(self.fc1_selection_index,self.fc2_selection_index,
-                   self.self_attn_q_proj_selection_index,self.self_attn_v_proj_selection_index,self.self_attn_k_proj_selection_index,self.self_attn_out_proj_selection_index)+1
+        return max(*filter(lambda x: x is not None, [
+            self.fc1_selection_index,self.fc2_selection_index,
+                   self.self_attn_q_proj_selection_index,self.self_attn_v_proj_selection_index,self.self_attn_k_proj_selection_index,self.self_attn_out_proj_selection_index]))+1
     
 @dataclass
 class DecoderConfig(EncDecBaseConfig):
@@ -109,9 +110,9 @@ class DecoderConfig(EncDecBaseConfig):
     encoder_attn_out_proj_selection_index:int=9
     @property
     def selective_layers(self):
-        return max(self.fc1_selection_index,self.fc2_selection_index,
+        return max(*filter(lambda x:x is not None,[ self.fc1_selection_index,self.fc2_selection_index,
                    self.self_attn_q_proj_selection_index,self.self_attn_v_proj_selection_index,self.self_attn_k_proj_selection_index,self.self_attn_out_proj_selection_index,
-                   self.encoder_attn_q_proj_selection_index,self.encoder_attn_v_proj_selection_index,self.encoder_attn_k_proj_selection_index,self.encoder_attn_out_proj_selection_index)+1
+                   self.encoder_attn_q_proj_selection_index,self.encoder_attn_v_proj_selection_index,self.encoder_attn_k_proj_selection_index,self.encoder_attn_out_proj_selection_index]))+1
     
     input_dim: int = II("model.decoder.embed_dim")
     output_dim: int = field(
