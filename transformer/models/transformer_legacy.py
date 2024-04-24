@@ -322,7 +322,7 @@ def transformer_wmt_en_de_non_selective(args):
     args.encoder_self_attn_k_proj_selection_index=getattr(args, "encoder_self_attn_k_proj_selection_index", None)
     args.encoder_self_attn_v_proj_selection_index=getattr(args, "encoder_self_attn_v_proj_selection_index", None)
     args.encoder_self_attn_q_proj_selection_index=getattr(args, "encoder_self_attn_q_proj_selection_index", None)
-    args.encoder_self_attn_out_proj_selection_index=getattr(args, "encoder_self_attn_out_proj_selection_index", 2)
+    args.encoder_self_attn_out_proj_selection_index=getattr(args, "encoder_self_attn_out_proj_selection_index", None)
     
     
     args.decoder_options_each_layer=getattr(args, "decoder_options_each_layer", 4)
@@ -334,11 +334,11 @@ def transformer_wmt_en_de_non_selective(args):
     args.decoder_self_attn_k_proj_selection_index=getattr(args, "decoder_self_attn_k_proj_selection_index", None)
     args.decoder_self_attn_v_proj_selection_index=getattr(args, "decoder_self_attn_v_proj_selection_index", None)
     args.decoder_self_attn_q_proj_selection_index=getattr(args, "decoder_self_attn_q_proj_selection_index", None)
-    args.decoder_self_attn_out_proj_selection_index=getattr(args, "decoder_self_attn_out_proj_selection_index", 2)
+    args.decoder_self_attn_out_proj_selection_index=getattr(args, "decoder_self_attn_out_proj_selection_index", None)
     args.decoder_encoder_attn_k_proj_selection_index=getattr(args, "decoder_encoder_attn_k_proj_selection_index", None)
     args.decoder_encoder_attn_v_proj_selection_index=getattr(args, "decoder_encoder_attn_v_proj_selection_index", None)
     args.decoder_encoder_attn_q_proj_selection_index=getattr(args, "decoder_encoder_attn_q_proj_selection_index", None)
-    args.decoder_encoder_attn_out_proj_selection_index=getattr(args, "decoder_encoder_attn_out_proj_selection_index", 3)
+    args.decoder_encoder_attn_out_proj_selection_index=getattr(args, "decoder_encoder_attn_out_proj_selection_index", None)
     base_architecture(args)
     
     
